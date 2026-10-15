@@ -11,7 +11,7 @@
 use std::f32::consts::PI;
 
 use bevy::prelude::*;
-use sim::{Behaviour, DeerKind, Herd, Pose};
+use sim::{DeerKind, Herd, Pose};
 
 use crate::terrain::IslandTerrain;
 
@@ -23,7 +23,7 @@ pub struct DeerPlugin;
 impl Plugin for DeerPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, spawn_herd)
-            .add_systems(Update, (temporary_demo_gaits, step_herd, sync_rigs).chain());
+            .add_systems(Update, (startle_on_keypress, step_herd, sync_rigs).chain());
     }
 }
 
@@ -486,25 +486,11 @@ impl Rig<'_, '_, '_> {
     }
 }
 
-/// TEMPORARY until milestone 4 adds the real behaviour state machine: gives every
-/// deer a fixed gait by its index, and steers walkers in gentle circles, so the leg
-/// animation can be seen.
-fn temporary_demo_gaits(mut herd: ResMut<HerdState>, time: Res<Time>) {
-    let dt = time.delta_secs();
-    for (i, deer) in herd.0.deer.iter_mut().enumerate() {
-        deer.behaviour = match i % 4 {
-            0 => Behaviour::Grazing,
-            1 => Behaviour::Idle,
-            2 => Behaviour::Walking,
-            _ => Behaviour::Trotting,
-        };
-        deer.target_speed = match deer.behaviour {
-            Behaviour::Walking => 2.15,
-            Behaviour::Trotting => 5.2,
-            _ => 0.0,
-        };
-        // Turn at a rate that keeps every circle about 6 m across.
-        deer.heading += deer.speed / 6.0 * dt;
+/// Press S to startle the herd into a trot (the original's "WASM Startle" button;
+/// on-screen buttons arrive with the HUD in milestone 7).
+fn startle_on_keypress(keys: Res<ButtonInput<KeyCode>>, mut herd: ResMut<HerdState>) {
+    if keys.just_pressed(KeyCode::KeyS) {
+        herd.0.startle();
     }
 }
 

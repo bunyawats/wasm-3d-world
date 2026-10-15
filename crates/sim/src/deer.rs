@@ -5,9 +5,9 @@
 //! - `Deer::update_pose` ports the neck, head, ear and tail animation that the
 //!   original did in JavaScript while copying WASM memory onto the Three.js rig.
 //!
-//! The deer's *decisions* (when to graze, walk or trot, and where to) come in
-//! milestone 4. Here, something outside sets `behaviour`, `target_speed` and
-//! `heading`, and this module animates the result.
+//! The deer's *decisions* (when to graze, walk or trot, and where to) live in
+//! `brain.rs`. They set `behaviour`, `target_speed`, `target` and `heading`, and
+//! this module animates the result.
 
 use glam::{Vec2, Vec3};
 
@@ -125,9 +125,9 @@ pub struct Deer {
     pub legs: Legs,
 
     pub behaviour: Behaviour,
-    /// Seconds left in the current behaviour (used by milestone 4's brain).
+    /// Seconds left in the current behaviour.
     pub behaviour_timer: f32,
-    /// Where the deer is heading for (used by milestone 4's brain).
+    /// Where the deer is heading for.
     pub target: Vec2,
     /// Where to look while idle.
     pub look_yaw: f32,
