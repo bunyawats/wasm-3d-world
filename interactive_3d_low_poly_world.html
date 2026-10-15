@@ -1,0 +1,2386 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WILDVERSE WASM // 3D Biomechanical & Ecosystem Engine</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        darkBg: '#070b14',
+                        panelBg: 'rgba(13, 20, 38, 0.82)'
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Three.js & OrbitControls -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overflow: hidden;
+            background-color: #070b14;
+            color: #f8fafc;
+        }
+        .font-mono-code {
+            font-family: 'JetBrains Mono', monospace;
+            font-variant-numeric: tabular-nums;
+            font-feature-settings: "tnum" 1;
+        }
+        .tabular-readout {
+            display: inline-block;
+            font-family: 'JetBrains Mono', monospace;
+            font-variant-numeric: tabular-nums;
+            font-feature-settings: "tnum" 1;
+            text-align: right;
+            white-space: nowrap;
+        }
+        ::-webkit-scrollbar {
+            width: 5px;
+            height: 5px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.45);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(56, 189, 248, 0.45);
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(56, 189, 248, 0.8);
+        }
+        .glass-panel {
+            background: rgba(13, 20, 38, 0.82);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+        }
+        .glow-button {
+            transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .glow-button:hover {
+            box-shadow: 0 0 16px rgba(56, 189, 248, 0.45);
+            transform: translateY(-1px);
+        }
+        .active-cam-btn {
+            background: rgba(14, 165, 233, 0.28) !important;
+            border-color: rgba(56, 189, 248, 0.85) !important;
+            color: #e0f2fe !important;
+            box-shadow: 0 0 12px rgba(56, 189, 248, 0.35);
+        }
+    </style>
+</head>
+<body class="w-screen h-screen m-0 p-0 relative select-none">
+
+    <!-- 3D Canvas Container -->
+    <div id="canvas-container" class="absolute inset-0 z-0"></div>
+
+    <!-- Unified Full-Screen Flex Overlay (Prevents Any Header/Sidebar Overlap at All Viewport Widths) -->
+    <div id="ui-root" class="fixed inset-0 z-10 flex flex-col justify-between p-2.5 sm:p-3 gap-2.5 pointer-events-none overflow-hidden">
+
+        <!-- ROW 1: Top Header Band (Single Cohesive Bar; Automatically Pushes Workspace Down if Wrapped) -->
+        <header class="w-full glass-panel px-3 py-2 rounded-2xl flex flex-wrap items-center justify-between gap-x-4 gap-y-2 pointer-events-auto shadow-2xl shrink-0">
+            <!-- Left: Brand Identity -->
+            <div class="flex items-center gap-2.5 shrink-0">
+                <div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-violet-600 via-cyan-500 to-emerald-500 flex items-center justify-center text-white shadow-lg shadow-cyan-500/30 shrink-0">
+                    <i class="fa-solid fa-microchip text-sm"></i>
+                </div>
+                <div class="whitespace-nowrap">
+                    <div class="flex items-center gap-2">
+                        <h1 class="font-bold text-xs sm:text-sm tracking-wide bg-gradient-to-r from-violet-300 via-cyan-300 to-emerald-300 bg-clip-text text-transparent">WILDVERSE // WASM KERNEL</h1>
+                        <span id="wasm-status-badge" class="hidden xl:inline-flex px-2 py-0.5 text-[10px] font-mono-code font-semibold rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 items-center gap-1">
+                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
+                            WASM ACTIVE
+                        </span>
+                    </div>
+                    <p class="text-[10px] text-slate-400 hidden lg:block">Compiled WebAssembly Terrain, Quadruped Kinematics & Flocking Engine</p>
+                </div>
+            </div>
+
+            <!-- Right: Live WASM Performance & Ecosystem Bar (Fixed-Width Tabular Containers) -->
+            <div class="flex flex-wrap items-center gap-2 sm:gap-2.5 text-xs whitespace-nowrap ml-auto">
+                <div class="flex items-center gap-1.5 bg-slate-900/70 px-2 py-1 rounded-lg border border-slate-800">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 shrink-0"></span>
+                    <span class="tabular-readout min-w-[52px] text-slate-200 font-semibold" id="fps-counter">60 FPS</span>
+                </div>
+                <div class="flex items-center gap-1 bg-slate-900/70 px-2 py-1 rounded-lg border border-slate-800 text-violet-300 font-mono-code" title="Smoothed WebAssembly stepSimulation() execution time">
+                    <i class="fa-solid fa-bolt text-violet-400 shrink-0"></i>
+                    <span class="hidden md:inline text-slate-400">Tick:</span>
+                    <strong id="wasm-tick-us" class="tabular-readout min-w-[58px] text-cyan-300">12.4 μs</strong>
+                </div>
+                <div class="flex items-center gap-2 bg-slate-900/70 px-2.5 py-1 rounded-lg border border-slate-800">
+                    <div class="flex items-center gap-1 text-amber-300 font-medium">
+                        <i class="fa-solid fa-paw shrink-0"></i>
+                        <span id="stat-deer" class="tabular-readout min-w-[18px]">9</span>
+                        <span class="hidden sm:inline">Deer</span>
+                    </div>
+                    <div class="h-3 w-[1px] bg-slate-700 shrink-0"></div>
+                    <div class="flex items-center gap-1 text-sky-300 font-medium">
+                        <i class="fa-solid fa-dove shrink-0"></i>
+                        <span id="stat-birds" class="tabular-readout min-w-[18px]">14</span>
+                        <span class="hidden sm:inline">Birds</span>
+                    </div>
+                </div>
+                <button onclick="toggleWasmInspector()" class="glow-button px-2.5 py-1 rounded-lg bg-violet-600/30 hover:bg-violet-600/50 border border-violet-400/50 text-violet-200 font-mono-code text-[11px] flex items-center gap-1.5 shrink-0">
+                    <i class="fa-solid fa-memory text-cyan-300"></i>
+                    <span>WASM Memory</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- ROW 2: Main Non-Overlapping Workspace Area (Left Sidebar + Right Telemetry / Memory Inspector) -->
+        <div class="flex-1 min-h-0 w-full flex items-start justify-between gap-3 overflow-hidden">
+
+            <!-- Left Column: Control Panel Sidebar -->
+            <div class="w-72 sm:w-80 max-w-[calc(100vw-1.25rem)] max-h-full glass-panel rounded-2xl p-3.5 flex flex-col gap-3 overflow-y-auto pointer-events-auto shadow-2xl shrink-0" id="control-panel">
+                
+                <div class="flex items-center justify-between pb-2 border-b border-slate-800">
+                    <h2 class="font-semibold text-xs tracking-wider uppercase text-cyan-400 flex items-center gap-2">
+                        <i class="fa-solid fa-sliders"></i> WASM World & Camera
+                    </h2>
+                    <button onclick="toggleWasmInspector()" class="text-[11px] text-violet-300 hover:text-white font-mono-code underline">
+                        Bytecode View
+                    </button>
+                </div>
+
+                <!-- Wildlife Camera Tracker Section -->
+                <div class="space-y-2">
+                    <div class="flex justify-between items-center">
+                        <label class="text-[11px] font-semibold text-slate-300 tracking-wider uppercase">Camera Target</label>
+                        <span class="text-[11px] text-cyan-400 font-mono-code" id="cam-label">Free Orbit</span>
+                    </div>
+                    <div class="grid grid-cols-3 gap-1.5">
+                        <button id="cam-btn-free" onclick="setCameraMode('free')" class="glow-button active-cam-btn py-2 px-2 rounded-xl bg-slate-800/80 border border-slate-700/70 text-xs font-medium flex flex-col items-center gap-1 text-slate-300">
+                            <i class="fa-solid fa-globe text-sm text-cyan-400"></i>
+                            <span>Free Orbit</span>
+                        </button>
+                        <button id="cam-btn-deer" onclick="setCameraMode('deer')" class="glow-button py-2 px-2 rounded-xl bg-slate-800/80 border border-slate-700/70 text-xs font-medium flex flex-col items-center gap-1 text-slate-300">
+                            <i class="fa-solid fa-paw text-sm text-amber-400"></i>
+                            <span>Follow Deer</span>
+                        </button>
+                        <button id="cam-btn-bird" onclick="setCameraMode('bird')" class="glow-button py-2 px-2 rounded-xl bg-slate-800/80 border border-slate-700/70 text-xs font-medium flex flex-col items-center gap-1 text-slate-300">
+                            <i class="fa-solid fa-dove text-sm text-sky-400"></i>
+                            <span>Follow Bird</span>
+                        </button>
+                    </div>
+                    <div class="flex gap-1.5 pt-1">
+                        <button onclick="cycleFollowedTarget()" class="w-1/2 py-1.5 rounded-lg bg-slate-800/90 hover:bg-slate-700 border border-slate-700 text-[11px] text-slate-300 transition flex items-center justify-center gap-1.5">
+                            <i class="fa-solid fa-arrows-rotate text-cyan-400"></i> Next Entity
+                        </button>
+                        <button onclick="startleHerdWasm()" class="w-1/2 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/50 text-[11px] text-amber-200 transition flex items-center justify-center gap-1.5 font-medium">
+                            <i class="fa-solid fa-bolt text-amber-400"></i> WASM Startle
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Environment & Time Section -->
+                <div class="space-y-2 pt-2.5 border-t border-slate-800/80">
+                    <label class="text-[11px] font-semibold text-slate-300 tracking-wider uppercase block">Solar Lighting Cycle</label>
+                    <div class="grid grid-cols-3 gap-1.5">
+                        <button onclick="setTimeOfDay(6.8)" class="glow-button py-1.5 rounded-lg bg-slate-800/80 hover:bg-amber-500/20 border border-slate-700/60 text-xs font-medium flex items-center justify-center gap-1.5 text-amber-200 transition">
+                            <i class="fa-solid fa-cloud-sun text-amber-400"></i> Dawn
+                        </button>
+                        <button onclick="setTimeOfDay(13.5)" class="glow-button py-1.5 rounded-lg bg-slate-800/80 hover:bg-cyan-500/20 border border-slate-700/60 text-xs font-medium flex items-center justify-center gap-1.5 text-cyan-200 transition">
+                            <i class="fa-solid fa-sun text-yellow-400"></i> Noon
+                        </button>
+                        <button onclick="setTimeOfDay(21.5)" class="glow-button py-1.5 rounded-lg bg-slate-800/80 hover:bg-indigo-500/20 border border-slate-700/60 text-xs font-medium flex items-center justify-center gap-1.5 text-indigo-200 transition">
+                            <i class="fa-solid fa-moon text-indigo-400"></i> Night
+                        </button>
+                    </div>
+                    <div>
+                        <div class="flex justify-between text-xs text-slate-400 mb-1">
+                            <span>Solar Progression</span>
+                            <span id="val-time" class="text-cyan-300 font-mono-code">1:30 PM</span>
+                        </div>
+                        <input type="range" id="time-slider" min="0" max="24" step="0.05" value="13.5" class="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-cyan-400">
+                    </div>
+                </div>
+
+                <!-- Wildlife & Flora Spawner (Allocates in WASM Linear Memory) -->
+                <div class="space-y-2 pt-2.5 border-t border-slate-800/80">
+                    <label class="text-[11px] font-semibold text-slate-300 tracking-wider uppercase">WASM Entity Allocator</label>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button onclick="spawnDeerWasm(true)" class="glow-button p-2 rounded-xl bg-gradient-to-tr from-amber-600/25 to-orange-600/25 border border-amber-500/40 hover:border-amber-400 text-xs font-medium flex items-center justify-center gap-1.5 text-amber-200 transition">
+                            <i class="fa-solid fa-paw text-amber-400"></i> + Spawn Deer
+                        </button>
+                        <button onclick="spawnBirdFlockWasm(4, true)" class="glow-button p-2 rounded-xl bg-gradient-to-tr from-sky-600/25 to-blue-600/25 border border-sky-500/40 hover:border-sky-400 text-xs font-medium flex items-center justify-center gap-1.5 text-sky-200 transition">
+                            <i class="fa-solid fa-dove text-sky-400"></i> + Bird Flock
+                        </button>
+                        <button onclick="spawnObject('tree')" class="glow-button p-2 rounded-xl bg-emerald-600/20 border border-emerald-500/30 hover:border-emerald-400 text-xs font-medium flex items-center justify-center gap-1.5 text-emerald-200 transition">
+                            <i class="fa-solid fa-tree text-emerald-400"></i> + Pine / Oak
+                        </button>
+                        <button onclick="spawnObject('crystal')" class="glow-button p-2 rounded-xl bg-cyan-600/20 border border-cyan-500/30 hover:border-cyan-400 text-xs font-medium flex items-center justify-center gap-1.5 text-cyan-200 transition">
+                            <i class="fa-solid fa-gem text-cyan-400"></i> + Crystal Rock
+                        </button>
+                    </div>
+                </div>
+
+                <!-- WASM Terrain Generator -->
+                <div class="space-y-2 pt-2.5 border-t border-slate-800/80">
+                    <div class="flex justify-between items-center">
+                        <label class="text-[11px] font-semibold text-slate-300 tracking-wider uppercase">WASM Terrain Synthesis</label>
+                        <button onclick="regenerateTerrain()" class="text-xs text-cyan-400 hover:text-cyan-300 flex items-center gap-1 transition">
+                            <i class="fa-solid fa-rotate"></i> Reseed WASM
+                        </button>
+                    </div>
+                    <div>
+                        <div class="flex justify-between text-xs text-slate-400 mb-1">
+                            <span>Elevation Amplitude</span>
+                            <span id="val-height" class="font-mono-code text-cyan-300">3.0x</span>
+                        </div>
+                        <input type="range" id="terrain-height-slider" min="1.5" max="5" step="0.5" value="3.0" class="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-cyan-400">
+                    </div>
+                    <div>
+                        <div class="flex justify-between text-xs text-slate-400 mb-1">
+                            <span>Forest & Meadow Density</span>
+                            <span id="val-trees" class="font-mono-code text-emerald-300">140</span>
+                        </div>
+                        <input type="range" id="tree-density-slider" min="60" max="240" step="20" value="140" class="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-cyan-400">
+                    </div>
+                </div>
+
+                <!-- Simulation Settings -->
+                <div class="space-y-2 pt-2.5 border-t border-slate-800/80">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs text-slate-300">Dynamic Solar Cycle</span>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="toggle-autotime" class="sr-only peer">
+                            <div class="w-9 h-5 bg-slate-800 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-cyan-500"></div>
+                        </label>
+                    </div>
+                    <div class="text-[11px] text-slate-400 bg-slate-900/70 rounded-xl p-2.5 border border-slate-800 font-mono-code space-y-1">
+                        <div class="flex justify-between"><span>WASM Binary Size:</span><span id="wasm-byte-len" class="text-violet-300">0 bytes</span></div>
+                        <div class="flex justify-between"><span>Shared Memory:</span><span class="text-cyan-300">2 Pages (128 KB)</span></div>
+                        <div class="flex justify-between"><span>Flora Count:</span><span id="stat-trees" class="text-emerald-300">0</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Stack for Creature Telemetry Card & Collapsible WASM Memory Inspector -->
+            <div class="flex flex-col items-end gap-2.5 max-h-full overflow-hidden shrink-0">
+
+                <!-- Creature Inspector Telemetry Badge (Visible when Following Creature) -->
+                <div id="creature-telemetry" class="glass-panel px-4 py-3 rounded-2xl w-72 shadow-2xl transition-all duration-300 hidden pointer-events-auto shrink-0">
+                    <div class="flex items-center justify-between border-b border-slate-700/70 pb-2 mb-2">
+                        <div class="flex items-center gap-2">
+                            <span class="w-2 h-2 rounded-full bg-cyan-400 animate-ping"></span>
+                            <h3 id="telemetry-title" class="text-xs font-bold uppercase tracking-wider text-cyan-300">Stag #1</h3>
+                        </div>
+                        <div class="flex items-center gap-1">
+                            <span id="telemetry-ptr" class="text-[10px] font-mono-code text-violet-300 bg-violet-950/80 px-1.5 py-0.5 rounded border border-violet-700/50">0x0100</span>
+                            <button onclick="cycleFollowedTarget()" class="text-[11px] bg-slate-800 hover:bg-slate-700 text-cyan-300 px-2 py-0.5 rounded-md border border-slate-600 transition">
+                                Next <i class="fa-solid fa-forward-step ml-0.5"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="space-y-1.5 text-xs">
+                        <div class="flex justify-between items-center">
+                            <span class="text-slate-400">WASM State Machine:</span>
+                            <span id="telemetry-state" class="tabular-readout min-w-[105px] font-semibold text-emerald-300">GRAZING (1)</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-slate-400">Kinematics Velocity:</span>
+                            <span id="telemetry-speed" class="tabular-readout min-w-[85px] text-slate-200">0.00 m/s</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-slate-400">WASM Terrain Normal:</span>
+                            <span id="telemetry-alt" class="tabular-readout min-w-[115px] text-slate-200">4.2m (3° slope)</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-slate-400">Stride Phase (rad):</span>
+                            <span id="telemetry-phase" class="tabular-readout min-w-[80px] text-amber-300">1.42 rad</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- WASM Bytecode & Shared Linear Memory Inspector Drawer -->
+                <div id="wasm-inspector-modal" class="w-80 sm:w-[400px] max-w-[calc(100vw-1.5rem)] flex-1 min-h-0 glass-panel rounded-2xl p-3.5 flex flex-col gap-2.5 shadow-2xl transition-all duration-300 hidden pointer-events-auto">
+                    <div class="flex items-center justify-between pb-2 border-b border-slate-700/80 shrink-0">
+                        <div class="flex items-center gap-2">
+                            <span class="w-2.5 h-2.5 rounded-full bg-violet-400 animate-pulse"></span>
+                            <h2 class="font-bold text-xs uppercase tracking-wider text-violet-300 font-mono-code">WASM Linear Memory & Bytecode</h2>
+                        </div>
+                        <button onclick="toggleWasmInspector()" class="text-slate-400 hover:text-white text-sm px-2 py-0.5 rounded bg-slate-800/80">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
+
+                    <!-- Exported WASM Symbols -->
+                    <div class="bg-slate-950/80 rounded-xl p-2.5 border border-slate-800 text-[11px] font-mono-code space-y-1 shrink-0">
+                        <div class="text-slate-400 font-semibold mb-1 flex justify-between">
+                            <span>Exported WASM Symbols:</span>
+                            <span class="text-emerald-400">Native f32 Math</span>
+                        </div>
+                        <div class="grid grid-cols-2 gap-1 text-cyan-300 text-[10px]">
+                            <div><i class="fa-solid fa-code text-violet-400 mr-1"></i>terrainHeight(x,z)</div>
+                            <div><i class="fa-solid fa-code text-violet-400 mr-1"></i>computeNormal(x,z)</div>
+                            <div><i class="fa-solid fa-code text-violet-400 mr-1"></i>stepDeerKinematics</div>
+                            <div><i class="fa-solid fa-code text-violet-400 mr-1"></i>stepBirdFlock(dt,t)</div>
+                        </div>
+                    </div>
+
+                    <!-- Live Float32Array Shared Memory Table -->
+                    <div class="flex-1 flex flex-col min-h-[140px] bg-slate-950/90 rounded-xl p-2.5 border border-slate-800 font-mono-code">
+                        <div class="flex justify-between items-center text-[10px] text-slate-400 pb-1.5 border-b border-slate-800">
+                            <span>LIVE <code class="text-cyan-300">Float32Array(wasmMemory.buffer)</code></span>
+                            <span id="mem-update-indicator" class="text-[10px] text-emerald-400">60Hz SYNC</span>
+                        </div>
+                        <div id="wasm-memory-dump" class="flex-1 overflow-y-auto text-[10px] leading-relaxed pt-1.5 space-y-1.5 text-slate-300">
+                            <!-- Populated at 8Hz for crisp legibility -->
+                        </div>
+                    </div>
+
+                    <!-- Compiled .wasm Binary Hex Dump -->
+                    <div class="h-28 flex flex-col bg-slate-950/90 rounded-xl p-2.5 border border-slate-800 font-mono-code shrink-0">
+                        <div class="flex justify-between items-center text-[10px] text-slate-400 pb-1 border-b border-slate-800">
+                            <span>COMPILED <code class="text-violet-300">module.wasm</code> BINARY HEX</span>
+                            <span class="text-[10px] text-violet-400">00 61 73 6d (\0asm)</span>
+                        </div>
+                        <div id="wasm-hex-dump" class="flex-1 overflow-y-auto text-[10px] leading-relaxed pt-1 text-violet-200/90 break-all select-all"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ROW 3: Bottom Interaction Bar -->
+        <div class="w-full flex justify-center shrink-0">
+            <div class="glass-panel px-4 py-1.5 rounded-2xl flex items-center gap-4 pointer-events-auto shadow-2xl text-xs text-slate-300 max-w-full whitespace-nowrap">
+                <div class="flex items-center gap-1.5">
+                    <i class="fa-solid fa-bullseye text-emerald-400"></i>
+                    <span><strong>Click any Deer/Bird</strong> to Inspect WASM State</span>
+                </div>
+                <div class="hidden sm:block h-3.5 w-[1px] bg-slate-700"></div>
+                <div class="hidden sm:flex items-center gap-1.5">
+                    <i class="fa-solid fa-computer-mouse text-cyan-400"></i>
+                    <span><strong>Drag</strong> to Orbit Camera</span>
+                </div>
+                <div class="hidden md:block h-3.5 w-[1px] bg-slate-700"></div>
+                <div class="hidden md:flex items-center gap-1.5">
+                    <i class="fa-solid fa-microchip text-violet-400"></i>
+                    <span><strong>WASM Linear Memory</strong> Drives All Joints</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="fixed bottom-14 right-4 z-50 glass-panel px-4 py-2.5 rounded-xl border border-cyan-500/40 text-xs text-cyan-200 shadow-2xl transition-all duration-300 translate-y-12 opacity-0 flex items-center gap-2.5 pointer-events-none">
+        <i class="fa-solid fa-circle-check text-cyan-400 text-sm"></i>
+        <span id="toast-message">Notification</span>
+    </div>
+
+    <!-- WebAssembly Compiler & 3D World Script -->
+    <script>
+        // ============================================================================
+        // PART 1: PROGRAMMATIC WEBASSEMBLY (WASM) BINARY COMPILER & SHARED MEMORY
+        // ============================================================================
+        // We construct a genuine, specification-compliant WebAssembly binary module
+        // in-browser and instantiate it with a shared WebAssembly.Memory (2 pages = 128KB).
+        //
+        // Shared Linear Memory Layout (Float32Array indices / Byte offsets):
+        //   Bytes 0x0000..0x00FF (f32[0..63])   : Global World & Sim Parameters
+        //     f32[0] = heightScale (default 3.0)
+        //     f32[1] = seedOffset  (default 0.0)
+        //     f32[2] = waterLevel  (default 0.8)
+        //     f32[3] = worldSize   (default 160.0)
+        //     f32[4] = normalOutX  (scratch output for WASM computeNormal)
+        //     f32[5] = normalOutY
+        //     f32[6] = normalOutZ
+        //     f32[7] = herdCenterX
+        //     f32[8] = herdCenterZ
+        //
+        //   Bytes 0x0100..0x18FF (f32[64..1599]): Deer Struct Array (Max 64 Deer, 24 floats = 96 bytes each)
+        //     Stride = 24 floats (96 bytes) per deer:
+        //     +0: x, +1: y, +2: z, +3: heading, +4: targetHeading, +5: speed, +6: targetSpeed
+        //     +7: walkCycle, +8: state (0=idle,1=grazing,2=walking,3=trotting), +9: stateTimer
+        //     +10: targetX, +11: targetZ, +12: normX, +13: normY, +14: normZ
+        //     +15: hipFL, +16: kneeFL, +17: hipFR, +18: kneeFR, +19: hipBL, +20: kneeBL, +21: hipBR, +22: kneeBR
+        //     +23: neckPitch
+        //
+        //   Bytes 0x1900..0x30FF (f32[1600..3135]): Bird Struct Array (Max 64 Birds, 16 floats = 64 bytes each)
+        //     Stride = 16 floats (64 bytes) per bird:
+        //     +0: x, +1: y, +2: z, +3: vx, +4: vy, +5: vz, +6: flapPhase
+        //     +7: state (0=flapping, 1=gliding), +8: stateTimer, +9: orbitX, +10: orbitY, +11: orbitZ
+        //     +12: bankAngle, +13: innerWingZ, +14: outerWingZ, +15: bodyBobY
+
+        let wasmMemory;
+        let wasmF32;
+        let wasmInstance;
+        let wasmBinaryBytes;
+
+        const DEER_BASE_F32 = 64;   // Byte offset 0x0100 (256)
+        const DEER_STRIDE_F32 = 24; // 96 bytes per deer
+        const BIRD_BASE_F32 = 1600; // Byte offset 0x1900 (6400)
+        const BIRD_STRIDE_F32 = 16; // 64 bytes per bird
+
+        // Helper for LEB128 encoding in our WASM Binary Assembler
+        function uleb128(val) {
+            const bytes = [];
+            do {
+                let byte = val & 0x7f;
+                val >>>= 7;
+                if (val !== 0) byte |= 0x80;
+                bytes.push(byte);
+            } while (val !== 0);
+            return bytes;
+        }
+
+        function sleb128(val) {
+            const bytes = [];
+            let more = true;
+            while (more) {
+                let byte = val & 0x7f;
+                val >>= 7;
+                if ((val === 0 && (byte & 0x40) === 0) || (val === -1 && (byte & 0x40) !== 0)) {
+                    more = false;
+                } else {
+                    byte |= 0x80;
+                }
+                bytes.push(byte);
+            }
+            return bytes;
+        }
+
+        function f32Bytes(val) {
+            const buf = new ArrayBuffer(4);
+            new DataView(buf).setFloat32(0, val, true);
+            return Array.from(new Uint8Array(buf));
+        }
+
+        function encodeString(str) {
+            const bytes = [];
+            for (let i = 0; i < str.length; i++) bytes.push(str.charCodeAt(i));
+            return [...uleb128(bytes.length), ...bytes];
+        }
+
+        function createSection(id, payload) {
+            return [id, ...uleb128(payload.length), ...payload];
+        }
+
+        // Compile real WebAssembly binary module with imported shared memory & fast math
+        async function initWasmEngine() {
+            wasmMemory = new WebAssembly.Memory({ initial: 2, maximum: 2 });
+            wasmF32 = new Float32Array(wasmMemory.buffer);
+
+            // Initialize Global Config in WASM Linear Memory
+            wasmF32[0] = 3.0;   // heightScale
+            wasmF32[1] = 0.0;   // seedOffset
+            wasmF32[2] = 0.8;   // waterLevel
+            wasmF32[3] = 160.0; // worldSize
+
+            // WASM Opcodes
+            const OP_BLOCK = 0x02, OP_LOOP = 0x03, OP_IF = 0x04, OP_ELSE = 0x05, OP_END = 0x0b;
+            const OP_BR = 0x0c, OP_BR_IF = 0x0d, OP_CALL = 0x10, OP_DROP = 0x1a, OP_SELECT = 0x1b;
+            const OP_LOCAL_GET = 0x20, OP_LOCAL_SET = 0x21, OP_LOCAL_TEE = 0x22;
+            const OP_I32_LOAD = 0x28, OP_F32_LOAD = 0x2a, OP_I32_STORE = 0x36, OP_F32_STORE = 0x38;
+            const OP_I32_CONST = 0x41, OP_F32_CONST = 0x43;
+            const OP_I32_LT_S = 0x48, OP_I32_GE_S = 0x4e, OP_I32_EQ = 0x46;
+            const OP_F32_EQ = 0x5b, OP_F32_LT = 0x5d, OP_F32_GT = 0x5e, OP_F32_LE = 0x5f, OP_F32_GE = 0x60;
+            const OP_I32_ADD = 0x6a, OP_I32_SUB = 0x6b, OP_I32_MUL = 0x6c;
+            const OP_F32_ABS = 0x8b, OP_F32_NEG = 0x8c, OP_F32_SQRT = 0x91;
+            const OP_F32_ADD = 0x92, OP_F32_SUB = 0x93, OP_F32_MUL = 0x94, OP_F32_DIV = 0x95;
+            const OP_F32_MIN = 0x96, OP_F32_MAX = 0x97;
+
+            const TYPE_I32 = 0x7f, TYPE_F32 = 0x7d, TYPE_VOID = 0x40;
+
+            // Function Types:
+            // Type 0: (f32) -> f32                   [imported sinf, cosf, expf]
+            // Type 1: (f32, f32) -> f32              [terrainHeight(x, z), atan2f(y,x)]
+            // Type 2: (f32, f32) -> void             [computeNormal(x, z)]
+            // Type 3: (i32, f32, f32) -> void        [stepDeerKinematics(count, dt, elapsedTime), stepBirdFlock(count, dt, elapsedTime)]
+            const typeSection = createSection(1, [
+                4, // 4 types
+                0x60, 1, TYPE_F32, 1, TYPE_F32,
+                0x60, 2, TYPE_F32, TYPE_F32, 1, TYPE_F32,
+                0x60, 2, TYPE_F32, TYPE_F32, 0,
+                0x60, 3, TYPE_I32, TYPE_F32, TYPE_F32, 0
+            ]);
+
+            // Import Section: env.memory, env.sin, env.cos, env.exp
+            // Imported Functions get indices: 0 = sin, 1 = cos, 2 = exp
+            const importSection = createSection(2, [
+                4, // 4 imports
+                ...encodeString("env"), ...encodeString("memory"), 0x02, 0x01, 2, 2,
+                ...encodeString("env"), ...encodeString("sin"), 0x00, 0,
+                ...encodeString("env"), ...encodeString("cos"), 0x00, 0,
+                ...encodeString("env"), ...encodeString("exp"), 0x00, 0
+            ]);
+
+            // Internal Functions:
+            // Func 3 (Type 1): terrainHeight(x: f32, z: f32) -> f32
+            // Func 4 (Type 2): computeNormal(x: f32, z: f32) -> void (writes to f32[4..6])
+            // Func 5 (Type 3): stepDeerKinematics(count: i32, dt: f32, time: f32) -> void
+            // Func 6 (Type 3): stepBirdFlock(count: i32, dt: f32, time: f32) -> void
+            const funcSection = createSection(3, [
+                4, // 4 defined functions
+                1, 2, 3, 3
+            ]);
+
+            // Export Section
+            const exportSection = createSection(7, [
+                4,
+                ...encodeString("terrainHeight"), 0x00, 3,
+                ...encodeString("computeNormal"), 0x00, 4,
+                ...encodeString("stepDeerKinematics"), 0x00, 5,
+                ...encodeString("stepBirdFlock"), 0x00, 6
+            ]);
+
+            // --- Build Func 3 Body: terrainHeight(x: local 0, z: local 1) -> f32 ---
+            // Locals: 2: s (f32), 3: dist (f32), 4: maxDist (f32), 5: falloff (f32), 6: h (f32), 7: meadow (f32)
+            const func3Body = [
+                1, 6, TYPE_F32, // 6 f32 locals (indices 2..7)
+                // s = f32[1] (byte offset 4)
+                OP_I32_CONST, 4, OP_F32_LOAD, 2, 0, OP_LOCAL_SET, 2,
+                // dist = sqrt(x*x + z*z)
+                OP_LOCAL_GET, 0, OP_LOCAL_GET, 0, OP_F32_MUL,
+                OP_LOCAL_GET, 1, OP_LOCAL_GET, 1, OP_F32_MUL,
+                OP_F32_ADD, OP_F32_SQRT, OP_LOCAL_SET, 3,
+                // maxDist = f32[3] * 0.46 = 73.6
+                OP_I32_CONST, 12, OP_F32_LOAD, 2, 0,
+                OP_F32_CONST, ...f32Bytes(0.46), OP_F32_MUL, OP_LOCAL_SET, 4,
+                // falloff = 1.0
+                OP_F32_CONST, ...f32Bytes(1.0), OP_LOCAL_SET, 5,
+                // if (dist > maxDist * 0.62)
+                OP_LOCAL_GET, 3, OP_LOCAL_GET, 4, OP_F32_CONST, ...f32Bytes(0.62), OP_F32_MUL, OP_F32_GT,
+                OP_IF, TYPE_VOID,
+                    OP_F32_CONST, ...f32Bytes(0.0),
+                    OP_F32_CONST, ...f32Bytes(1.0),
+                    OP_LOCAL_GET, 3, OP_LOCAL_GET, 4, OP_F32_CONST, ...f32Bytes(0.62), OP_F32_MUL, OP_F32_SUB,
+                    OP_LOCAL_GET, 4, OP_F32_CONST, ...f32Bytes(0.38), OP_F32_MUL, OP_F32_DIV,
+                    OP_F32_SUB, OP_F32_MAX, OP_LOCAL_TEE, 5,
+                    // smoothstep: falloff = falloff * falloff * (3 - 2 * falloff)
+                    OP_LOCAL_GET, 5, OP_F32_MUL,
+                    OP_F32_CONST, ...f32Bytes(3.0), OP_F32_CONST, ...f32Bytes(2.0), OP_LOCAL_GET, 5, OP_F32_MUL, OP_F32_SUB,
+                    OP_F32_MUL, OP_LOCAL_SET, 5,
+                OP_END,
+
+                // Layered trigonometric synthesis in native WASM:
+                // term1 = sin(x * 0.028 + s) * cos(z * 0.028 + s) * 10.5
+                OP_LOCAL_GET, 0, OP_F32_CONST, ...f32Bytes(0.028), OP_F32_MUL, OP_LOCAL_GET, 2, OP_F32_ADD, OP_CALL, 0,
+                OP_LOCAL_GET, 1, OP_F32_CONST, ...f32Bytes(0.028), OP_F32_MUL, OP_LOCAL_GET, 2, OP_F32_ADD, OP_CALL, 1,
+                OP_F32_MUL, OP_F32_CONST, ...f32Bytes(10.5), OP_F32_MUL,
+
+                // term2 = sin(x * 0.065 - s) * cos(z * 0.06 + s * 0.5) * 4.2
+                OP_LOCAL_GET, 0, OP_F32_CONST, ...f32Bytes(0.065), OP_F32_MUL, OP_LOCAL_GET, 2, OP_F32_SUB, OP_CALL, 0,
+                OP_LOCAL_GET, 1, OP_F32_CONST, ...f32Bytes(0.060), OP_F32_MUL, OP_LOCAL_GET, 2, OP_F32_CONST, ...f32Bytes(0.5), OP_F32_MUL, OP_F32_ADD, OP_CALL, 1,
+                OP_F32_MUL, OP_F32_CONST, ...f32Bytes(4.2), OP_F32_MUL, OP_F32_ADD,
+
+                // term3 = sin((x + z) * 0.018 + 1.4) * 9.0
+                OP_LOCAL_GET, 0, OP_LOCAL_GET, 1, OP_F32_ADD, OP_F32_CONST, ...f32Bytes(0.018), OP_F32_MUL, OP_F32_CONST, ...f32Bytes(1.4), OP_F32_ADD, OP_CALL, 0,
+                OP_F32_CONST, ...f32Bytes(9.0), OP_F32_MUL, OP_F32_ADD,
+
+                // term4 = cos(x * 0.12) * sin(z * 0.12) * 1.1
+                OP_LOCAL_GET, 0, OP_F32_CONST, ...f32Bytes(0.12), OP_F32_MUL, OP_CALL, 1,
+                OP_LOCAL_GET, 1, OP_F32_CONST, ...f32Bytes(0.12), OP_F32_MUL, OP_CALL, 0,
+                OP_F32_MUL, OP_F32_CONST, ...f32Bytes(1.1), OP_F32_MUL, OP_F32_ADD,
+
+                // scale by (heightScale / 3.0) where heightScale = f32[0]
+                OP_I32_CONST, 0, OP_F32_LOAD, 2, 0, OP_F32_CONST, ...f32Bytes(3.0), OP_F32_DIV, OP_F32_MUL,
+                OP_LOCAL_SET, 6,
+
+                // Central meadow basin: meadow = exp(-(x*x + z*z) / 1400.0)
+                OP_LOCAL_GET, 0, OP_LOCAL_GET, 0, OP_F32_MUL,
+                OP_LOCAL_GET, 1, OP_LOCAL_GET, 1, OP_F32_MUL, OP_F32_ADD,
+                OP_F32_NEG, OP_F32_CONST, ...f32Bytes(1400.0), OP_F32_DIV, OP_CALL, 2,
+                OP_LOCAL_SET, 7,
+
+                // h = (h * (1.0 - meadow * 0.55) + 3.2 * meadow) * falloff
+                OP_LOCAL_GET, 6,
+                OP_F32_CONST, ...f32Bytes(1.0), OP_LOCAL_GET, 7, OP_F32_CONST, ...f32Bytes(0.55), OP_F32_MUL, OP_F32_SUB,
+                OP_F32_MUL,
+                OP_F32_CONST, ...f32Bytes(3.2), OP_LOCAL_GET, 7, OP_F32_MUL, OP_F32_ADD,
+                OP_LOCAL_GET, 5, OP_F32_MUL, OP_LOCAL_SET, 6,
+
+                // Deep ocean trench beyond 0.78 * maxDist
+                OP_LOCAL_GET, 3, OP_LOCAL_GET, 4, OP_F32_CONST, ...f32Bytes(0.78), OP_F32_MUL, OP_F32_GT,
+                OP_IF, TYPE_VOID,
+                    OP_LOCAL_GET, 6,
+                    OP_LOCAL_GET, 3, OP_LOCAL_GET, 4, OP_F32_CONST, ...f32Bytes(0.78), OP_F32_MUL, OP_F32_SUB,
+                    OP_F32_CONST, ...f32Bytes(0.45), OP_F32_MUL,
+                    OP_F32_SUB, OP_LOCAL_SET, 6,
+                OP_END,
+
+                OP_LOCAL_GET, 6,
+                OP_END
+            ];
+
+            // --- Build Func 4 Body: computeNormal(x: local 0, z: local 1) -> writes normalized (nx, ny, nz) to f32[4..6] ---
+            // Locals: 2: nx, 3: ny, 4: nz, 5: len
+            const func4Body = [
+                1, 4, TYPE_F32,
+                // nx = terrainHeight(x - 0.35, z) - terrainHeight(x + 0.35, z)
+                OP_LOCAL_GET, 0, OP_F32_CONST, ...f32Bytes(0.35), OP_F32_SUB, OP_LOCAL_GET, 1, OP_CALL, 3,
+                OP_LOCAL_GET, 0, OP_F32_CONST, ...f32Bytes(0.35), OP_F32_ADD, OP_LOCAL_GET, 1, OP_CALL, 3,
+                OP_F32_SUB, OP_LOCAL_SET, 2,
+                // ny = 0.70
+                OP_F32_CONST, ...f32Bytes(0.70), OP_LOCAL_SET, 3,
+                // nz = terrainHeight(x, z - 0.35) - terrainHeight(x, z + 0.35)
+                OP_LOCAL_GET, 0, OP_LOCAL_GET, 1, OP_F32_CONST, ...f32Bytes(0.35), OP_F32_SUB, OP_CALL, 3,
+                OP_LOCAL_GET, 0, OP_LOCAL_GET, 1, OP_F32_CONST, ...f32Bytes(0.35), OP_F32_ADD, OP_CALL, 3,
+                OP_F32_SUB, OP_LOCAL_SET, 4,
+                // len = sqrt(nx*nx + ny*ny + nz*nz)
+                OP_LOCAL_GET, 2, OP_LOCAL_GET, 2, OP_F32_MUL,
+                OP_LOCAL_GET, 3, OP_LOCAL_GET, 3, OP_F32_MUL, OP_F32_ADD,
+                OP_LOCAL_GET, 4, OP_LOCAL_GET, 4, OP_F32_MUL, OP_F32_ADD,
+                OP_F32_SQRT, OP_LOCAL_SET, 5,
+                // store normalized normal at byte offsets 16, 20, 24 (f32[4], f32[5], f32[6])
+                OP_I32_CONST, 16, OP_LOCAL_GET, 2, OP_LOCAL_GET, 5, OP_F32_DIV, OP_F32_STORE, 2, 0,
+                OP_I32_CONST, 20, OP_LOCAL_GET, 3, OP_LOCAL_GET, 5, OP_F32_DIV, OP_F32_STORE, 2, 0,
+                OP_I32_CONST, 24, OP_LOCAL_GET, 4, OP_LOCAL_GET, 5, OP_F32_DIV, OP_F32_STORE, 2, 0,
+                OP_END
+            ];
+
+            // --- Build Func 5 Body: stepDeerKinematics(count: i32 (0), dt: f32 (1), time: f32 (2)) ---
+            // Loops through all active deer in WASM Linear Memory (base 256, stride 96 bytes),
+            // integrates velocity, samples WASM terrainHeight & normal, advances stride phase,
+            // and computes 8 multi-jointed hip & knee/hock joint angles directly in WASM memory!
+            // Locals: 3: i (i32), 4: ptr (i32), 5: spd (f32), 6: hdg (f32), 7: cycle (f32), 8: amp (f32), 9: p (f32), 10: state (f32)
+            const func5Body = [
+                2, 2, TYPE_I32, 6, TYPE_F32,
+                OP_I32_CONST, 0, OP_LOCAL_SET, 3, // i = 0
+                OP_BLOCK, TYPE_VOID,
+                    OP_LOOP, TYPE_VOID,
+                        OP_LOCAL_GET, 3, OP_LOCAL_GET, 0, OP_I32_GE_S, OP_BR_IF, 1,
+                        // ptr = 256 + i * 96
+                        OP_I32_CONST, ...sleb128(256),
+                        OP_LOCAL_GET, 3, OP_I32_CONST, ...sleb128(96), OP_I32_MUL, OP_I32_ADD,
+                        OP_LOCAL_SET, 4,
+
+                        // spd = lerp(spd (+20), targetSpd (+24), dt * 4.5)
+                        OP_LOCAL_GET, 4,
+                        OP_LOCAL_GET, 4, OP_F32_LOAD, 2, 20,
+                        OP_LOCAL_GET, 4, OP_F32_LOAD, 2, 24,
+                        OP_LOCAL_GET, 4, OP_F32_LOAD, 2, 20, OP_F32_SUB,
+                        OP_LOCAL_GET, 1, OP_F32_CONST, ...f32Bytes(4.5), OP_F32_MUL, OP_F32_MUL,
+                        OP_F32_ADD, OP_LOCAL_TEE, 5,
+                        OP_F32_STORE, 2, 20,
+
+                        // hdg = mem[ptr + 12], state = mem[ptr + 32]
+                        OP_LOCAL_GET, 4, OP_F32_LOAD, 2, 12, OP_LOCAL_SET, 6,
+                        OP_LOCAL_GET, 4, OP_F32_LOAD, 2, 32, OP_LOCAL_SET, 10,
+
+                        // Update X (+0) and Z (+8) if speed > 0.05
+                        OP_LOCAL_GET, 5, OP_F32_CONST, ...f32Bytes(0.05), OP_F32_GT,
+                        OP_IF, TYPE_VOID,
+                            // x += sin(hdg) * spd * dt
+                            OP_LOCAL_GET, 4,
+                            OP_LOCAL_GET, 4, OP_F32_LOAD, 2, 0,
+                            OP_LOCAL_GET, 6, OP_CALL, 0, OP_LOCAL_GET, 5, OP_F32_MUL, OP_LOCAL_GET, 1, OP_F32_MUL, OP_F32_ADD,
+                            OP_F32_STORE, 2, 0,
+                            // z += cos(hdg) * spd * dt
+                            OP_LOCAL_GET, 4,
+                            OP_LOCAL_GET, 4, OP_F32_LOAD, 2, 8,
+                            OP_LOCAL_GET, 6, OP_CALL, 1, OP_LOCAL_GET, 5, OP_F32_MUL, OP_LOCAL_GET, 1, OP_F32_MUL, OP_F32_ADD,
+                            OP_F32_STORE, 2, 8,
+                        OP_END,
+
+                        // y (+4) = terrainHeight(x, z)
+                        OP_LOCAL_GET, 4,
+                        OP_LOCAL_GET, 4, OP_F32_LOAD, 2, 0,
+                        OP_LOCAL_GET, 4, OP_F32_LOAD, 2, 8,
+                        OP_CALL, 3,
+                        OP_F32_STORE, 2, 4,
+
+                        // computeNormal(x, z) -> smooth lerp into deer normal (+48, +52, +56)
+                        OP_LOCAL_GET, 4, OP_F32_LOAD, 2, 0,
+                        OP_LOCAL_GET, 4, OP_F32_LOAD, 2, 8,
+                        OP_CALL, 4,
+                        // normX (+48)
+                        OP_LOCAL_GET, 4,
+                        OP_LOCAL_GET, 4, OP_F32_LOAD, 2, 48,
+                        OP_I32_CONST, 16, OP_F32_LOAD, 2, 0, OP_LOCAL_GET, 4, OP_F32_LOAD, 2, 48, OP_F32_SUB,
+                        OP_LOCAL_GET, 1, OP_F32_CONST, ...f32Bytes(8.0), OP_F32_MUL, OP_F32_MUL, OP_F32_ADD,
+                        OP_F32_STORE, 2, 48,
+                        // normY (+52)
+                        OP_LOCAL_GET, 4,
+                        OP_LOCAL_GET, 4, OP_F32_LOAD, 2, 52,
+                        OP_I32_CONST, 20, OP_F32_LOAD, 2, 0, OP_LOCAL_GET, 4, OP_F32_LOAD, 2, 52, OP_F32_SUB,
+                        OP_LOCAL_GET, 1, OP_F32_CONST, ...f32Bytes(8.0), OP_F32_MUL, OP_F32_MUL, OP_F32_ADD,
+                        OP_F32_STORE, 2, 52,
+                        // normZ (+56)
+                        OP_LOCAL_GET, 4,
+                        OP_LOCAL_GET, 4, OP_F32_LOAD, 2, 56,
+                        OP_I32_CONST, 24, OP_F32_LOAD, 2, 0, OP_LOCAL_GET, 4, OP_F32_LOAD, 2, 56, OP_F32_SUB,
+                        OP_LOCAL_GET, 1, OP_F32_CONST, ...f32Bytes(8.0), OP_F32_MUL, OP_F32_MUL, OP_F32_ADD,
+                        OP_F32_STORE, 2, 56,
+
+                        // Advance walkCycle (+28): cycle += dt * (spd * 2.8)
+                        OP_LOCAL_GET, 4,
+                        OP_LOCAL_GET, 4, OP_F32_LOAD, 2, 28,
+                        OP_LOCAL_GET, 1, OP_LOCAL_GET, 5, OP_F32_CONST, ...f32Bytes(2.85), OP_F32_MUL, OP_F32_MUL, OP_F32_ADD,
+                        OP_LOCAL_TEE, 7,
+                        OP_F32_STORE, 2, 28,
+
+                        // amp = min(1.0, spd / 2.4)
+                        OP_F32_CONST, ...f32Bytes(1.0),
+                        OP_LOCAL_GET, 5, OP_F32_CONST, ...f32Bytes(2.4), OP_F32_DIV,
+                        OP_F32_MIN, OP_LOCAL_SET, 8,
+
+                        // Compute 4 Articulated Legs (Hip & Knee/Hock joints) in WASM:
+                        // 1. Front-Left (phase = cycle + 0.0) -> hipFL (+60), kneeFL (+64)
+                        OP_LOCAL_GET, 4,
+                        OP_F32_CONST, ...f32Bytes(0.04),
+                        OP_LOCAL_GET, 7, OP_CALL, 0, OP_F32_CONST, ...f32Bytes(0.48), OP_F32_MUL, OP_LOCAL_GET, 8, OP_F32_MUL, OP_F32_ADD,
+                        OP_F32_STORE, 2, 60,
+
+                        OP_LOCAL_GET, 4,
+                        OP_F32_CONST, ...f32Bytes(0.0), OP_LOCAL_GET, 7, OP_CALL, 1, OP_F32_MAX,
+                        OP_LOCAL_GET, 8, OP_F32_MUL, OP_F32_CONST, ...f32Bytes(-0.88), OP_F32_MUL, OP_F32_CONST, ...f32Bytes(0.04), OP_F32_SUB,
+                        OP_F32_STORE, 2, 64,
+
+                        // 2. Front-Right (phase = cycle + PI) -> hipFR (+68), kneeFR (+72)
+                        OP_LOCAL_GET, 7, OP_F32_CONST, ...f32Bytes(3.1415926), OP_F32_ADD, OP_LOCAL_SET, 9,
+                        OP_LOCAL_GET, 4,
+                        OP_F32_CONST, ...f32Bytes(0.04),
+                        OP_LOCAL_GET, 9, OP_CALL, 0, OP_F32_CONST, ...f32Bytes(0.48), OP_F32_MUL, OP_LOCAL_GET, 8, OP_F32_MUL, OP_F32_ADD,
+                        OP_F32_STORE, 2, 68,
+
+                        OP_LOCAL_GET, 4,
+                        OP_F32_CONST, ...f32Bytes(0.0), OP_LOCAL_GET, 9, OP_CALL, 1, OP_F32_MAX,
+                        OP_LOCAL_GET, 8, OP_F32_MUL, OP_F32_CONST, ...f32Bytes(-0.88), OP_F32_MUL, OP_F32_CONST, ...f32Bytes(0.04), OP_F32_SUB,
+                        OP_F32_STORE, 2, 72,
+
+                        // 3. Back-Left (phase = cycle + PI + 0.35) -> hipBL (+76), kneeBL (+80)
+                        OP_LOCAL_GET, 7, OP_F32_CONST, ...f32Bytes(3.4915926), OP_F32_ADD, OP_LOCAL_SET, 9,
+                        OP_LOCAL_GET, 4,
+                        OP_F32_CONST, ...f32Bytes(-0.05),
+                        OP_LOCAL_GET, 9, OP_CALL, 0, OP_F32_CONST, ...f32Bytes(0.48), OP_F32_MUL, OP_LOCAL_GET, 8, OP_F32_MUL, OP_F32_ADD,
+                        OP_F32_STORE, 2, 76,
+
+                        OP_LOCAL_GET, 4,
+                        OP_F32_CONST, ...f32Bytes(0.0), OP_LOCAL_GET, 9, OP_CALL, 1, OP_F32_MAX,
+                        OP_LOCAL_GET, 8, OP_F32_MUL, OP_F32_CONST, ...f32Bytes(0.72), OP_F32_MUL, OP_F32_CONST, ...f32Bytes(0.08), OP_F32_ADD,
+                        OP_F32_STORE, 2, 80,
+
+                        // 4. Back-Right (phase = cycle + 0.35) -> hipBR (+84), kneeBR (+88)
+                        OP_LOCAL_GET, 7, OP_F32_CONST, ...f32Bytes(0.35), OP_F32_ADD, OP_LOCAL_SET, 9,
+                        OP_LOCAL_GET, 4,
+                        OP_F32_CONST, ...f32Bytes(-0.05),
+                        OP_LOCAL_GET, 9, OP_CALL, 0, OP_F32_CONST, ...f32Bytes(0.48), OP_F32_MUL, OP_LOCAL_GET, 8, OP_F32_MUL, OP_F32_ADD,
+                        OP_F32_STORE, 2, 84,
+
+                        OP_LOCAL_GET, 4,
+                        OP_F32_CONST, ...f32Bytes(0.0), OP_LOCAL_GET, 9, OP_CALL, 1, OP_F32_MAX,
+                        OP_LOCAL_GET, 8, OP_F32_MUL, OP_F32_CONST, ...f32Bytes(0.72), OP_F32_MUL, OP_F32_CONST, ...f32Bytes(0.08), OP_F32_ADD,
+                        OP_F32_STORE, 2, 88,
+
+                        // i++
+                        OP_LOCAL_GET, 3, OP_I32_CONST, 1, OP_I32_ADD, OP_LOCAL_SET, 3,
+                        OP_BR, 0,
+                    OP_END,
+                OP_END,
+                OP_END
+            ];
+
+            // --- Build Func 6 Body: stepBirdFlock(count: i32 (0), dt: f32 (1), time: f32 (2)) ---
+            // Updates bird positions, flapping phase, and 2-segment wing kinematics in WASM memory (base 6400, stride 64 bytes)
+            // Locals: 3: i (i32), 4: ptr (i32), 5: phase (f32), 6: s (f32), 7: c (f32)
+            const func6Body = [
+                2, 2, TYPE_I32, 3, TYPE_F32,
+                OP_I32_CONST, 0, OP_LOCAL_SET, 3,
+                OP_BLOCK, TYPE_VOID,
+                    OP_LOOP, TYPE_VOID,
+                        OP_LOCAL_GET, 3, OP_LOCAL_GET, 0, OP_I32_GE_S, OP_BR_IF, 1,
+                        // ptr = 6400 + i * 64
+                        OP_I32_CONST, ...sleb128(6400),
+                        OP_LOCAL_GET, 3, OP_I32_CONST, ...sleb128(64), OP_I32_MUL, OP_I32_ADD,
+                        OP_LOCAL_SET, 4,
+
+                        // x (+0) += vx (+12) * dt
+                        OP_LOCAL_GET, 4,
+                        OP_LOCAL_GET, 4, OP_F32_LOAD, 2, 0,
+                        OP_LOCAL_GET, 4, OP_F32_LOAD, 2, 12, OP_LOCAL_GET, 1, OP_F32_MUL, OP_F32_ADD,
+                        OP_F32_STORE, 2, 0,
+
+                        // y (+4) += vy (+16) * dt
+                        OP_LOCAL_GET, 4,
+                        OP_LOCAL_GET, 4, OP_F32_LOAD, 2, 4,
+                        OP_LOCAL_GET, 4, OP_F32_LOAD, 2, 16, OP_LOCAL_GET, 1, OP_F32_MUL, OP_F32_ADD,
+                        OP_F32_STORE, 2, 4,
+
+                        // z (+8) += vz (+20) * dt
+                        OP_LOCAL_GET, 4,
+                        OP_LOCAL_GET, 4, OP_F32_LOAD, 2, 8,
+                        OP_LOCAL_GET, 4, OP_F32_LOAD, 2, 20, OP_LOCAL_GET, 1, OP_F32_MUL, OP_F32_ADD,
+                        OP_F32_STORE, 2, 8,
+
+                        // Check state (+28): 0.0 = flapping, 1.0 = gliding
+                        OP_LOCAL_GET, 4, OP_F32_LOAD, 2, 28, OP_F32_CONST, ...f32Bytes(0.5), OP_F32_LT,
+                        OP_IF, TYPE_VOID,
+                            // flapPhase (+24) += dt * 11.5
+                            OP_LOCAL_GET, 4,
+                            OP_LOCAL_GET, 4, OP_F32_LOAD, 2, 24,
+                            OP_LOCAL_GET, 1, OP_F32_CONST, ...f32Bytes(11.5), OP_F32_MUL, OP_F32_ADD,
+                            OP_LOCAL_TEE, 5,
+                            OP_F32_STORE, 2, 24,
+
+                            OP_LOCAL_GET, 5, OP_CALL, 0, OP_LOCAL_SET, 6, // s = sin(phase)
+                            OP_LOCAL_GET, 5, OP_CALL, 1, OP_LOCAL_SET, 7, // c = cos(phase)
+
+                            // innerWingZ (+52) = s * 0.52 + 0.08
+                            OP_LOCAL_GET, 4,
+                            OP_LOCAL_GET, 6, OP_F32_CONST, ...f32Bytes(0.52), OP_F32_MUL, OP_F32_CONST, ...f32Bytes(0.08), OP_F32_ADD,
+                            OP_F32_STORE, 2, 52,
+
+                            // outerWingZ (+56) = s * 0.35 - abs(c) * 0.25
+                            OP_LOCAL_GET, 4,
+                            OP_LOCAL_GET, 6, OP_F32_CONST, ...f32Bytes(0.35), OP_F32_MUL,
+                            OP_LOCAL_GET, 7, OP_F32_ABS, OP_F32_CONST, ...f32Bytes(0.25), OP_F32_MUL, OP_F32_SUB,
+                            OP_F32_STORE, 2, 56,
+
+                            // bodyBobY (+60) = -s * 0.06
+                            OP_LOCAL_GET, 4,
+                            OP_LOCAL_GET, 6, OP_F32_CONST, ...f32Bytes(-0.06), OP_F32_MUL,
+                            OP_F32_STORE, 2, 60,
+                        OP_ELSE,
+                            // Gliding dihedral posture
+                            OP_LOCAL_GET, 4, OP_F32_CONST, ...f32Bytes(0.14), OP_F32_STORE, 2, 52,
+                            OP_LOCAL_GET, 4, OP_F32_CONST, ...f32Bytes(-0.08), OP_F32_STORE, 2, 56,
+                            OP_LOCAL_GET, 4, OP_F32_CONST, ...f32Bytes(0.0), OP_F32_STORE, 2, 60,
+                        OP_END,
+
+                        OP_LOCAL_GET, 3, OP_I32_CONST, 1, OP_I32_ADD, OP_LOCAL_SET, 3,
+                        OP_BR, 0,
+                    OP_END,
+                OP_END,
+                OP_END
+            ];
+
+            const codeSection = createSection(10, [
+                4,
+                ...uleb128(func3Body.length), ...func3Body,
+                ...uleb128(func4Body.length), ...func4Body,
+                ...uleb128(func5Body.length), ...func5Body,
+                ...uleb128(func6Body.length), ...func6Body
+            ]);
+
+            // Assemble Full WebAssembly Binary (\0asm v1)
+            wasmBinaryBytes = new Uint8Array([
+                0x00, 0x61, 0x73, 0x6d, // Magic "\0asm"
+                0x01, 0x00, 0x00, 0x00, // Version 1
+                ...typeSection,
+                ...importSection,
+                ...funcSection,
+                ...exportSection,
+                ...codeSection
+            ]);
+
+            // Compile & Instantiate Genuine WebAssembly Module
+            const compiledModule = await WebAssembly.compile(wasmBinaryBytes);
+            wasmInstance = await WebAssembly.instantiate(compiledModule, {
+                env: {
+                    memory: wasmMemory,
+                    sin: Math.sin,
+                    cos: Math.cos,
+                    exp: Math.exp
+                }
+            });
+
+            // Populate UI Hex Dump & Byte Size
+            document.getElementById('wasm-byte-len').innerText = `${wasmBinaryBytes.byteLength} bytes`;
+            const hexArr = Array.from(wasmBinaryBytes).map(b => b.toString(16).padStart(2, '0').toUpperCase());
+            document.getElementById('wasm-hex-dump').innerText = hexArr.join(' ');
+        }
+
+        // Wrapper calls into Compiled WebAssembly Exports
+        function getTerrainHeightWasm(x, z) {
+            return wasmInstance.exports.terrainHeight(x, z);
+        }
+
+        function getTerrainNormalWasm(x, z) {
+            wasmInstance.exports.computeNormal(x, z);
+            return new THREE.Vector3(wasmF32[4], wasmF32[5], wasmF32[6]);
+        }
+
+        // ============================================================================
+        // PART 2: THREE.JS 3D WORLD & ARTICULATED BIOMECHANICAL CREATURES
+        // ============================================================================
+        let scene, camera, renderer, controls;
+        let terrainMesh, waterMesh, sunLight, ambientLight, hemisphereLight, starsPoints;
+        let cloudsGroup, treesGroup, rocksGroup, grassGroup, crystalsGroup, creaturesGroup;
+        let clock = new THREE.Clock();
+
+        const config = {
+            worldSize: 160,
+            terrainSegments: 96,
+            heightScale: 3.0,
+            treeDensity: 140,
+            timeOfDay: 13.5,
+            autoTime: false,
+            waterLevel: 0.8,
+            seedOffset: 0
+        };
+
+        let deerList = [];
+        let birdList = [];
+        let treeObstacles = [];
+        let cameraMode = 'free';
+        let followedIndex = 0;
+        let previousTargetPos = new THREE.Vector3();
+        let isTargetInitialized = false;
+
+        // Smoothed WASM execution timing & UI throttling state (prevents rapid DOM layout jitter)
+        let smoothedWasmUs = 12.0;
+        let lastUiMetricUpdateTime = 0;
+
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        const sharedMats = {};
+
+        window.addEventListener('load', async () => {
+            await initWasmEngine();
+            initSharedMaterials();
+            initThree();
+            setupEventListeners();
+            animate();
+        });
+
+        function initSharedMaterials() {
+            sharedMats.stagCoat = new THREE.MeshStandardMaterial({ color: 0x8c5327, roughness: 0.78, metalness: 0.05 });
+            sharedMats.doeCoat = new THREE.MeshStandardMaterial({ color: 0xa66a38, roughness: 0.75, metalness: 0.05 });
+            sharedMats.fawnCoat = new THREE.MeshStandardMaterial({ color: 0xb87a44, roughness: 0.75, metalness: 0.05 });
+            sharedMats.deerBelly = new THREE.MeshStandardMaterial({ color: 0xe2ceb5, roughness: 0.85 });
+            sharedMats.deerDark = new THREE.MeshStandardMaterial({ color: 0x1e1b18, roughness: 0.4, metalness: 0.1 });
+            sharedMats.antler = new THREE.MeshStandardMaterial({ color: 0xdcd3c2, roughness: 0.6, metalness: 0.08 });
+
+            sharedMats.birdBody = new THREE.MeshStandardMaterial({ color: 0x3b281e, roughness: 0.65 });
+            sharedMats.birdBreast = new THREE.MeshStandardMaterial({ color: 0xd6cfc7, roughness: 0.75 });
+            sharedMats.birdWingTip = new THREE.MeshStandardMaterial({ color: 0x171412, roughness: 0.6 });
+            sharedMats.birdBeak = new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.4 });
+        }
+
+        function initThree() {
+            const container = document.getElementById('canvas-container');
+
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x7ec0ee);
+            scene.fog = new THREE.FogExp2(0x8ab8dc, 0.0042);
+
+            camera = new THREE.PerspectiveCamera(48, window.innerWidth / window.innerHeight, 0.25, 600);
+            camera.position.set(55, 32, 70);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.05;
+            container.appendChild(renderer.domElement);
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.06;
+            controls.maxPolarAngle = Math.PI / 2 - 0.02;
+            controls.minDistance = 2.2;
+            controls.maxDistance = 220;
+            controls.target.set(0, 4, 0);
+
+            ambientLight = new THREE.AmbientLight(0xdbeafe, 0.42);
+            scene.add(ambientLight);
+
+            hemisphereLight = new THREE.HemisphereLight(0x93c5fd, 0x3f4f29, 0.65);
+            scene.add(hemisphereLight);
+
+            sunLight = new THREE.DirectionalLight(0xfff7ed, 1.35);
+            sunLight.castShadow = true;
+            sunLight.shadow.mapSize.width = 2048;
+            sunLight.shadow.mapSize.height = 2048;
+            sunLight.shadow.camera.near = 10;
+            sunLight.shadow.camera.far = 320;
+            const d = 95;
+            sunLight.shadow.camera.left = -d;
+            sunLight.shadow.camera.right = d;
+            sunLight.shadow.camera.top = d;
+            sunLight.shadow.camera.bottom = -d;
+            sunLight.shadow.bias = -0.0004;
+            scene.add(sunLight);
+
+            treesGroup = new THREE.Group();
+            rocksGroup = new THREE.Group();
+            grassGroup = new THREE.Group();
+            crystalsGroup = new THREE.Group();
+            cloudsGroup = new THREE.Group();
+            creaturesGroup = new THREE.Group();
+            scene.add(treesGroup, rocksGroup, grassGroup, crystalsGroup, cloudsGroup, creaturesGroup);
+
+            createSkyAndStars();
+            generateTerrainWasm();
+            generateWater();
+            generateClouds();
+            spawnInitialWildlifeWasm();
+            updateLightingAndSky();
+
+            window.addEventListener('resize', onWindowResize);
+            renderer.domElement.addEventListener('pointerdown', onCanvasPointerDown);
+        }
+
+        function createSkyAndStars() {
+            const starGeo = new THREE.BufferGeometry();
+            const starCount = 600;
+            const positions = new Float32Array(starCount * 3);
+            for (let i = 0; i < starCount; i++) {
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.acos(Math.random() * 0.85 + 0.15);
+                const r = 240;
+                positions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+                positions[i * 3 + 1] = r * Math.cos(phi);
+                positions[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
+            }
+            starGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            const starMat = new THREE.PointsMaterial({ color: 0xffffff, size: 1.4, transparent: true, opacity: 0 });
+            starsPoints = new THREE.Points(starGeo, starMat);
+            scene.add(starsPoints);
+        }
+
+        // Generate 3D Terrain Mesh Directly from Compiled WebAssembly `terrainHeight` & `computeNormal`
+        function generateTerrainWasm() {
+            if (terrainMesh) {
+                scene.remove(terrainMesh);
+                terrainMesh.geometry.dispose();
+                terrainMesh.material.dispose();
+            }
+
+            wasmF32[0] = config.heightScale;
+            wasmF32[1] = config.seedOffset;
+
+            const size = config.worldSize;
+            const segs = config.terrainSegments;
+            const geometry = new THREE.PlaneGeometry(size, size, segs, segs);
+            geometry.rotateX(-Math.PI / 2);
+
+            const pos = geometry.attributes.position;
+            const colors = [];
+            const c = new THREE.Color();
+
+            for (let i = 0; i < pos.count; i++) {
+                const x = pos.getX(i);
+                const z = pos.getZ(i);
+                const y = getTerrainHeightWasm(x, z);
+                pos.setY(i, y);
+
+                const n = getTerrainNormalWasm(x, z);
+                const slope = 1.0 - n.y;
+
+                if (y < config.waterLevel + 0.45) {
+                    c.setHex(0xd6c7a9);
+                } else if (y < 9.5) {
+                    if (slope > 0.26) {
+                        c.setHex(0x647462);
+                    } else {
+                        const blend = (Math.sin(x * 0.15) * Math.cos(z * 0.15) + 1) * 0.5;
+                        c.setHex(0x3b7a3e).lerp(new THREE.Color(0x528c42), blend);
+                    }
+                } else if (y < 15.5) {
+                    c.setHex(0x5c6658);
+                } else {
+                    c.setHex(0xf1f5f9);
+                }
+                colors.push(c.r, c.g, c.b);
+            }
+
+            geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+            geometry.computeVertexNormals();
+
+            const material = new THREE.MeshStandardMaterial({
+                vertexColors: true,
+                roughness: 0.88,
+                metalness: 0.04
+            });
+
+            terrainMesh = new THREE.Mesh(geometry, material);
+            terrainMesh.receiveShadow = true;
+            terrainMesh.castShadow = true;
+            scene.add(terrainMesh);
+
+            populateFloraAndRocks();
+        }
+
+        function generateWater() {
+            if (waterMesh) {
+                scene.remove(waterMesh);
+                waterMesh.geometry.dispose();
+                waterMesh.material.dispose();
+            }
+
+            const waterGeo = new THREE.PlaneGeometry(config.worldSize * 2.2, config.worldSize * 2.2, 56, 56);
+            waterGeo.rotateX(-Math.PI / 2);
+
+            const waterMat = new THREE.MeshStandardMaterial({
+                color: 0x0e7490,
+                roughness: 0.14,
+                metalness: 0.75,
+                transparent: true,
+                opacity: 0.86
+            });
+
+            waterMesh = new THREE.Mesh(waterGeo, waterMat);
+            waterMesh.position.y = config.waterLevel;
+            waterMesh.receiveShadow = true;
+            scene.add(waterMesh);
+        }
+
+        function populateFloraAndRocks() {
+            [treesGroup, rocksGroup, grassGroup, crystalsGroup].forEach(g => {
+                while (g.children.length > 0) g.remove(g.children[0]);
+            });
+            treeObstacles = [];
+
+            const trunkMat = new THREE.MeshStandardMaterial({ color: 0x4a3525, roughness: 0.92 });
+            const pineMat1 = new THREE.MeshStandardMaterial({ color: 0x1e4d2b, roughness: 0.82 });
+            const pineMat2 = new THREE.MeshStandardMaterial({ color: 0x265c34, roughness: 0.82 });
+            const oakMat = new THREE.MeshStandardMaterial({ color: 0x3b6e38, roughness: 0.8 });
+            const rockMat = new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.88, flatShading: true });
+            const grassMat = new THREE.MeshStandardMaterial({ color: 0x4d8c45, roughness: 0.8 });
+
+            let placedTrees = 0;
+            for (let i = 0; i < config.treeDensity * 2.5 && placedTrees < config.treeDensity; i++) {
+                const rx = (Math.random() - 0.5) * (config.worldSize * 0.82);
+                const rz = (Math.random() - 0.5) * (config.worldSize * 0.82);
+                if (rx * rx + rz * rz < 180 && Math.random() < 0.7) continue;
+
+                const y = getTerrainHeightWasm(rx, rz);
+                const normal = getTerrainNormalWasm(rx, rz);
+
+                if (y > config.waterLevel + 0.9 && y < 13.0 && normal.y > 0.82) {
+                    const isOak = Math.random() < 0.28 && y < 7.5;
+                    const tree = createDetailedTree(isOak, trunkMat, pineMat1, pineMat2, oakMat);
+                    const s = 0.75 + Math.random() * 0.65;
+                    tree.scale.set(s, s, s);
+                    tree.position.set(rx, y - 0.1, rz);
+                    tree.rotation.y = Math.random() * Math.PI * 2;
+                    treesGroup.add(tree);
+                    treeObstacles.push({ x: rx, z: rz, radius: 1.6 * s });
+                    placedTrees++;
+                }
+            }
+
+            const rockGeo = new THREE.DodecahedronGeometry(1.0, 1);
+            for (let i = 0; i < 45; i++) {
+                const rx = (Math.random() - 0.5) * (config.worldSize * 0.82);
+                const rz = (Math.random() - 0.5) * (config.worldSize * 0.82);
+                const y = getTerrainHeightWasm(rx, rz);
+                if (y > config.waterLevel - 0.2 && y < 15.0) {
+                    const rock = new THREE.Mesh(rockGeo, rockMat);
+                    const sx = 0.6 + Math.random() * 1.4;
+                    const sy = 0.4 + Math.random() * 0.9;
+                    const sz = 0.6 + Math.random() * 1.3;
+                    rock.scale.set(sx, sy, sz);
+                    rock.position.set(rx, y + sy * 0.3, rz);
+                    rock.rotation.set(Math.random(), Math.random() * Math.PI, Math.random());
+                    rock.castShadow = true;
+                    rock.receiveShadow = true;
+                    rocksGroup.add(rock);
+                    treeObstacles.push({ x: rx, z: rz, radius: Math.max(sx, sz) * 0.9 });
+                }
+            }
+
+            const bladeGeo = new THREE.ConeGeometry(0.08, 0.55, 4);
+            bladeGeo.translate(0, 0.27, 0);
+            for (let i = 0; i < 220; i++) {
+                const rx = (Math.random() - 0.5) * (config.worldSize * 0.75);
+                const rz = (Math.random() - 0.5) * (config.worldSize * 0.75);
+                const y = getTerrainHeightWasm(rx, rz);
+                if (y > config.waterLevel + 0.5 && y < 9.0) {
+                    const tuft = new THREE.Group();
+                    for (let b = 0; b < 4; b++) {
+                        const blade = new THREE.Mesh(bladeGeo, grassMat);
+                        blade.position.set((Math.random() - 0.5) * 0.25, 0, (Math.random() - 0.5) * 0.25);
+                        blade.rotation.set((Math.random() - 0.5) * 0.4, Math.random() * Math.PI, (Math.random() - 0.5) * 0.4);
+                        tuft.add(blade);
+                    }
+                    tuft.position.set(rx, y, rz);
+                    grassGroup.add(tuft);
+                }
+            }
+
+            const crystalGeo = new THREE.OctahedronGeometry(0.9, 0);
+            const crystalMat = new THREE.MeshStandardMaterial({
+                color: 0x38bdf8,
+                emissive: 0x0284c7,
+                emissiveIntensity: 0.5,
+                roughness: 0.15,
+                metalness: 0.85,
+                flatShading: true
+            });
+            for (let i = 0; i < 18; i++) {
+                const rx = (Math.random() - 0.5) * (config.worldSize * 0.7);
+                const rz = (Math.random() - 0.5) * (config.worldSize * 0.7);
+                const y = getTerrainHeightWasm(rx, rz);
+                if (y > 7.5 && y < 16.0) {
+                    const crystal = new THREE.Mesh(crystalGeo, crystalMat);
+                    const s = 0.6 + Math.random() * 0.8;
+                    crystal.scale.set(s, s * 1.8, s);
+                    crystal.position.set(rx, y + s * 0.9, rz);
+                    crystal.rotation.set((Math.random() - 0.5) * 0.4, Math.random() * Math.PI, (Math.random() - 0.5) * 0.4);
+                    crystal.userData = { baseY: crystal.position.y, phase: Math.random() * Math.PI * 2 };
+                    crystalsGroup.add(crystal);
+                }
+            }
+
+            updateStatsUI();
+        }
+
+        function createDetailedTree(isOak, trunkMat, pineMat1, pineMat2, oakMat) {
+            const group = new THREE.Group();
+            const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.45, 2.6, 7), trunkMat);
+            trunk.position.y = 1.3;
+            trunk.castShadow = true;
+            trunk.receiveShadow = true;
+            group.add(trunk);
+
+            if (isOak) {
+                const crownPositions = [
+                    [0, 3.3, 0, 1.7],
+                    [0.9, 2.9, 0.6, 1.25],
+                    [-0.85, 3.0, -0.5, 1.3],
+                    [-0.5, 3.5, 0.8, 1.15],
+                    [0.6, 3.6, -0.7, 1.1]
+                ];
+                crownPositions.forEach(([px, py, pz, r]) => {
+                    const puff = new THREE.Mesh(new THREE.IcosahedronGeometry(r, 1), oakMat);
+                    puff.position.set(px, py, pz);
+                    puff.castShadow = true;
+                    puff.receiveShadow = true;
+                    group.add(puff);
+                });
+            } else {
+                const tiers = [
+                    { r: 2.1, h: 2.8, y: 2.6, mat: pineMat1 },
+                    { r: 1.7, h: 2.5, y: 4.1, mat: pineMat2 },
+                    { r: 1.25, h: 2.2, y: 5.4, mat: pineMat1 },
+                    { r: 0.75, h: 1.8, y: 6.5, mat: pineMat2 }
+                ];
+                tiers.forEach(t => {
+                    const cone = new THREE.Mesh(new THREE.ConeGeometry(t.r, t.h, 8), t.mat);
+                    cone.position.y = t.y;
+                    cone.castShadow = true;
+                    cone.receiveShadow = true;
+                    group.add(cone);
+                });
+            }
+            return group;
+        }
+
+        // ============================================================================
+        // ARTICULATED MULTI-JOINTED DEER & BIRD RIGS (BOUND TO WASM LINEAR MEMORY)
+        // ============================================================================
+        function createArticulatedDeer(type = 'stag', wasmIndex = 0) {
+            const root = new THREE.Group();
+            const coatMat = type === 'stag' ? sharedMats.stagCoat : (type === 'doe' ? sharedMats.doeCoat : sharedMats.fawnCoat);
+            const scale = type === 'stag' ? 1.08 : (type === 'doe' ? 0.94 : 0.68);
+            root.scale.set(scale, scale, scale);
+
+            const bodyPivot = new THREE.Group();
+            bodyPivot.position.y = 1.28;
+            root.add(bodyPivot);
+
+            const torsoGeo = new THREE.SphereGeometry(0.42, 14, 12);
+            torsoGeo.scale(0.88, 0.92, 1.95);
+            const torso = new THREE.Mesh(torsoGeo, coatMat);
+            torso.castShadow = true;
+            torso.receiveShadow = true;
+            bodyPivot.add(torso);
+
+            const chestGeo = new THREE.SphereGeometry(0.43, 12, 10);
+            chestGeo.scale(0.92, 1.04, 1.05);
+            const chest = new THREE.Mesh(chestGeo, coatMat);
+            chest.position.set(0, 0.04, 0.52);
+            chest.castShadow = true;
+            bodyPivot.add(chest);
+
+            const rumpGeo = new THREE.SphereGeometry(0.40, 12, 10);
+            rumpGeo.scale(0.90, 0.98, 1.0);
+            const rump = new THREE.Mesh(rumpGeo, coatMat);
+            rump.position.set(0, 0.05, -0.55);
+            rump.castShadow = true;
+            bodyPivot.add(rump);
+
+            const bellyGeo = new THREE.SphereGeometry(0.37, 10, 8);
+            bellyGeo.scale(0.76, 0.65, 1.75);
+            const belly = new THREE.Mesh(bellyGeo, sharedMats.deerBelly);
+            belly.position.set(0, -0.14, -0.02);
+            bodyPivot.add(belly);
+
+            if (type === 'fawn') {
+                const spotGeo = new THREE.SphereGeometry(0.055, 6, 6);
+                for (let s = 0; s < 10; s++) {
+                    const spot = new THREE.Mesh(spotGeo, sharedMats.deerBelly);
+                    const side = s % 2 === 0 ? 1 : -1;
+                    spot.position.set(side * (0.31 + Math.random() * 0.04), 0.1 + (Math.random() - 0.5) * 0.2, (Math.random() - 0.5) * 0.9);
+                    bodyPivot.add(spot);
+                }
+            }
+
+            const tailPivot = new THREE.Group();
+            tailPivot.position.set(0, 0.22, -0.88);
+            bodyPivot.add(tailPivot);
+
+            const tailTop = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.34, 7), coatMat);
+            tailTop.rotation.x = Math.PI * 0.72;
+            tailTop.position.set(0, -0.1, -0.1);
+            tailPivot.add(tailTop);
+
+            const tailUnder = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.30, 7), sharedMats.deerBelly);
+            tailUnder.rotation.x = Math.PI * 0.72;
+            tailUnder.position.set(0, -0.12, -0.08);
+            tailPivot.add(tailUnder);
+
+            const neckBasePivot = new THREE.Group();
+            neckBasePivot.position.set(0, 0.24, 0.76);
+            neckBasePivot.rotation.x = 0.35;
+            bodyPivot.add(neckBasePivot);
+
+            const neckGeo = new THREE.CylinderGeometry(0.15, 0.25, 0.78, 10);
+            neckGeo.translate(0, 0.34, 0);
+            const neckMesh = new THREE.Mesh(neckGeo, coatMat);
+            neckMesh.castShadow = true;
+            neckBasePivot.add(neckMesh);
+
+            const throatGeo = new THREE.CylinderGeometry(0.12, 0.18, 0.70, 8);
+            throatGeo.translate(0, 0.34, 0.06);
+            const throatMesh = new THREE.Mesh(throatGeo, sharedMats.deerBelly);
+            neckBasePivot.add(throatMesh);
+
+            const headPivot = new THREE.Group();
+            headPivot.position.set(0, 0.70, 0.04);
+            headPivot.rotation.x = -0.30;
+            neckBasePivot.add(headPivot);
+
+            const craniumGeo = new THREE.SphereGeometry(0.20, 12, 10);
+            craniumGeo.scale(0.85, 0.90, 1.15);
+            const cranium = new THREE.Mesh(craniumGeo, coatMat);
+            cranium.castShadow = true;
+            headPivot.add(cranium);
+
+            const snoutGeo = new THREE.CylinderGeometry(0.085, 0.15, 0.42, 9);
+            snoutGeo.rotateX(Math.PI / 2);
+            const snout = new THREE.Mesh(snoutGeo, coatMat);
+            snout.position.set(0, -0.04, 0.26);
+            snout.castShadow = true;
+            headPivot.add(snout);
+
+            const nose = new THREE.Mesh(new THREE.SphereGeometry(0.065, 8, 8), sharedMats.deerDark);
+            nose.scale.set(1.1, 0.85, 0.7);
+            nose.position.set(0, -0.02, 0.47);
+            headPivot.add(nose);
+
+            const eyeGeo = new THREE.SphereGeometry(0.038, 8, 8);
+            const leftEye = new THREE.Mesh(eyeGeo, sharedMats.deerDark);
+            leftEye.position.set(0.145, 0.05, 0.10);
+            const rightEye = new THREE.Mesh(eyeGeo, sharedMats.deerDark);
+            rightEye.position.set(-0.145, 0.05, 0.10);
+            headPivot.add(leftEye, rightEye);
+
+            const earGeo = new THREE.ConeGeometry(0.075, 0.32, 7);
+            earGeo.scale(0.55, 1.0, 1.0);
+            earGeo.translate(0, 0.16, 0);
+
+            const leftEarPivot = new THREE.Group();
+            leftEarPivot.position.set(0.13, 0.14, -0.06);
+            leftEarPivot.rotation.set(-0.25, 0.2, -0.65);
+            leftEarPivot.add(new THREE.Mesh(earGeo, coatMat));
+
+            const rightEarPivot = new THREE.Group();
+            rightEarPivot.position.set(-0.13, 0.14, -0.06);
+            rightEarPivot.rotation.set(-0.25, -0.2, 0.65);
+            rightEarPivot.add(new THREE.Mesh(earGeo, coatMat));
+
+            headPivot.add(leftEarPivot, rightEarPivot);
+
+            if (type === 'stag') {
+                const createAntlerSide = (side) => {
+                    const antlerGroup = new THREE.Group();
+                    antlerGroup.position.set(side * 0.09, 0.17, -0.04);
+
+                    const beam1 = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.032, 0.42, 6), sharedMats.antler);
+                    beam1.position.set(side * 0.09, 0.18, -0.08);
+                    beam1.rotation.z = -side * 0.42;
+                    beam1.rotation.x = -0.35;
+                    antlerGroup.add(beam1);
+
+                    const beam2 = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.022, 0.40, 6), sharedMats.antler);
+                    beam2.position.set(side * 0.22, 0.45, -0.12);
+                    beam2.rotation.z = -side * 0.18;
+                    beam2.rotation.x = 0.22;
+                    antlerGroup.add(beam2);
+
+                    const browTine = new THREE.Mesh(new THREE.ConeGeometry(0.018, 0.24, 5), sharedMats.antler);
+                    browTine.position.set(side * 0.09, 0.16, 0.05);
+                    browTine.rotation.x = 0.85;
+                    browTine.rotation.z = -side * 0.2;
+                    antlerGroup.add(browTine);
+
+                    const midTine = new THREE.Mesh(new THREE.ConeGeometry(0.016, 0.26, 5), sharedMats.antler);
+                    midTine.position.set(side * 0.20, 0.36, 0.02);
+                    midTine.rotation.x = 0.55;
+                    midTine.rotation.z = -side * 0.35;
+                    antlerGroup.add(midTine);
+
+                    const crown1 = new THREE.Mesh(new THREE.ConeGeometry(0.015, 0.25, 5), sharedMats.antler);
+                    crown1.position.set(side * 0.27, 0.68, -0.04);
+                    crown1.rotation.x = 0.25;
+                    crown1.rotation.z = -side * 0.1;
+                    antlerGroup.add(crown1);
+
+                    const crown2 = new THREE.Mesh(new THREE.ConeGeometry(0.014, 0.22, 5), sharedMats.antler);
+                    crown2.position.set(side * 0.22, 0.65, -0.20);
+                    crown2.rotation.x = -0.3;
+                    crown2.rotation.z = side * 0.15;
+                    antlerGroup.add(crown2);
+
+                    return antlerGroup;
+                };
+                headPivot.add(createAntlerSide(1), createAntlerSide(-1));
+            }
+
+            function createArticulatedLeg(x, y, z, isFront) {
+                const hipPivot = new THREE.Group();
+                hipPivot.position.set(x, y, z);
+
+                const upperLen = isFront ? 0.52 : 0.56;
+                const lowerLen = isFront ? 0.56 : 0.58;
+
+                const upperGeo = new THREE.CylinderGeometry(isFront ? 0.11 : 0.14, 0.068, upperLen, 8);
+                upperGeo.translate(0, -upperLen / 2, 0);
+                const upperMesh = new THREE.Mesh(upperGeo, coatMat);
+                upperMesh.castShadow = true;
+                hipPivot.add(upperMesh);
+
+                const jointSphere = new THREE.Mesh(new THREE.SphereGeometry(0.068, 8, 8), coatMat);
+                jointSphere.position.set(0, -upperLen, 0);
+                hipPivot.add(jointSphere);
+
+                const kneePivot = new THREE.Group();
+                kneePivot.position.set(0, -upperLen, 0);
+                hipPivot.add(kneePivot);
+
+                const lowerGeo = new THREE.CylinderGeometry(0.058, 0.040, lowerLen, 8);
+                lowerGeo.translate(0, -lowerLen / 2, 0);
+                const lowerMesh = new THREE.Mesh(lowerGeo, coatMat);
+                lowerMesh.castShadow = true;
+                kneePivot.add(lowerMesh);
+
+                const hoofGeo = new THREE.CylinderGeometry(0.044, 0.056, 0.10, 7);
+                hoofGeo.translate(0, -lowerLen - 0.04, 0.015);
+                const hoofMesh = new THREE.Mesh(hoofGeo, sharedMats.deerDark);
+                kneePivot.add(hoofMesh);
+
+                bodyPivot.add(hipPivot);
+                return { hipPivot, kneePivot };
+            }
+
+            const legFL = createArticulatedLeg(0.24, -0.14, 0.56, true);
+            const legFR = createArticulatedLeg(-0.24, -0.14, 0.56, true);
+            const legBL = createArticulatedLeg(0.25, -0.10, -0.58, false);
+            const legBR = createArticulatedLeg(-0.25, -0.10, -0.58, false);
+
+            root.userData = {
+                isCreature: true,
+                species: 'deer',
+                wasmIndex: wasmIndex,
+                f32Base: DEER_BASE_F32 + wasmIndex * DEER_STRIDE_F32,
+                bytePtrHex: '0x' + ((DEER_BASE_F32 + wasmIndex * DEER_STRIDE_F32) * 4).toString(16).toUpperCase().padStart(4, '0'),
+                type: type,
+                name: `${type.charAt(0).toUpperCase() + type.slice(1)} #${wasmIndex + 1}`,
+                earTwitchTimer: Math.random() * 3,
+                lookAngleY: 0,
+                joints: {
+                    bodyPivot, neckBasePivot, headPivot, leftEarPivot, rightEarPivot, tailPivot,
+                    legFL, legFR, legBL, legBR
+                }
+            };
+
+            root.traverse(child => {
+                if (child.isMesh) child.userData.creatureRoot = root;
+            });
+
+            return root;
+        }
+
+        function createArticulatedBird(wasmIndex) {
+            const root = new THREE.Group();
+            const scale = 0.85 + Math.random() * 0.25;
+            root.scale.set(scale, scale, scale);
+
+            const bankGroup = new THREE.Group();
+            root.add(bankGroup);
+
+            const bodyGeo = new THREE.SphereGeometry(0.32, 12, 10);
+            bodyGeo.scale(0.78, 0.72, 1.85);
+            const bodyMesh = new THREE.Mesh(bodyGeo, sharedMats.birdBody);
+            bodyMesh.castShadow = true;
+            bankGroup.add(bodyMesh);
+
+            const breastGeo = new THREE.SphereGeometry(0.28, 10, 8);
+            breastGeo.scale(0.72, 0.62, 1.55);
+            const breastMesh = new THREE.Mesh(breastGeo, sharedMats.birdBreast);
+            breastMesh.position.set(0, -0.07, 0.05);
+            bankGroup.add(breastMesh);
+
+            const headGroup = new THREE.Group();
+            headGroup.position.set(0, 0.10, 0.56);
+            bankGroup.add(headGroup);
+
+            const headMesh = new THREE.Mesh(new THREE.SphereGeometry(0.18, 10, 10), sharedMats.birdBreast);
+            headMesh.scale.set(0.85, 0.9, 1.15);
+            headGroup.add(headMesh);
+
+            const beakMesh = new THREE.Mesh(new THREE.ConeGeometry(0.065, 0.28, 6), sharedMats.birdBeak);
+            beakMesh.rotation.x = Math.PI / 2 + 0.12;
+            beakMesh.position.set(0, -0.02, 0.26);
+            headGroup.add(beakMesh);
+
+            const tailPivot = new THREE.Group();
+            tailPivot.position.set(0, 0.02, -0.54);
+            bankGroup.add(tailPivot);
+
+            for (let t = -2; t <= 2; t++) {
+                const featherGeo = new THREE.BoxGeometry(0.12, 0.02, 0.52);
+                featherGeo.translate(0, 0, -0.24);
+                const feather = new THREE.Mesh(featherGeo, sharedMats.birdBody);
+                feather.rotation.y = t * 0.14;
+                tailPivot.add(feather);
+            }
+
+            function createWing(side) {
+                const innerPivot = new THREE.Group();
+                innerPivot.position.set(side * 0.20, 0.08, 0.12);
+
+                const innerLen = 0.78;
+                const innerGeo = new THREE.BoxGeometry(innerLen, 0.045, 0.46);
+                innerGeo.translate(side * (innerLen / 2), 0, -0.04);
+                const innerMesh = new THREE.Mesh(innerGeo, sharedMats.birdBody);
+                innerMesh.castShadow = true;
+                innerPivot.add(innerMesh);
+
+                const outerPivot = new THREE.Group();
+                outerPivot.position.set(side * innerLen, 0, 0);
+                innerPivot.add(outerPivot);
+
+                const outerLen = 0.92;
+                const outerGeo = new THREE.BoxGeometry(outerLen, 0.032, 0.38);
+                outerGeo.translate(side * (outerLen / 2), 0, -0.06);
+                const outerMesh = new THREE.Mesh(outerGeo, sharedMats.birdWingTip);
+                outerMesh.castShadow = true;
+                outerPivot.add(outerMesh);
+
+                for (let f = 0; f < 3; f++) {
+                    const tipGeo = new THREE.BoxGeometry(0.32, 0.02, 0.09);
+                    tipGeo.translate(side * 0.16, 0, 0);
+                    const tip = new THREE.Mesh(tipGeo, sharedMats.birdWingTip);
+                    tip.position.set(side * (outerLen - 0.08), 0, 0.06 - f * 0.11);
+                    tip.rotation.y = -side * (0.12 + f * 0.14);
+                    outerPivot.add(tip);
+                }
+
+                bankGroup.add(innerPivot);
+                return { innerPivot, outerPivot };
+            }
+
+            const leftWing = createWing(1);
+            const rightWing = createWing(-1);
+
+            root.userData = {
+                isCreature: true,
+                species: 'bird',
+                wasmIndex: wasmIndex,
+                f32Base: BIRD_BASE_F32 + wasmIndex * BIRD_STRIDE_F32,
+                bytePtrHex: '0x' + ((BIRD_BASE_F32 + wasmIndex * BIRD_STRIDE_F32) * 4).toString(16).toUpperCase().padStart(4, '0'),
+                name: `Hawk #${wasmIndex + 1}`,
+                joints: { bankGroup, tailPivot, leftWing, rightWing }
+            };
+
+            root.traverse(child => {
+                if (child.isMesh) child.userData.creatureRoot = root;
+            });
+
+            return root;
+        }
+
+        function spawnInitialWildlifeWasm() {
+            while (creaturesGroup.children.length > 0) creaturesGroup.remove(creaturesGroup.children[0]);
+            deerList = [];
+            birdList = [];
+
+            const herdTypes = ['stag', 'doe', 'doe', 'stag', 'fawn', 'doe', 'stag', 'doe', 'fawn'];
+            herdTypes.forEach(type => spawnDeerWasm(false, type));
+
+            spawnBirdFlockWasm(14, false);
+            updateStatsUI();
+        }
+
+        function spawnDeerWasm(notify = true, forcedType = null) {
+            if (deerList.length >= 60) {
+                showToast("WASM Deer Buffer Full (60 max)");
+                return;
+            }
+            const idx = deerList.length;
+            const types = ['stag', 'doe', 'fawn'];
+            const type = forcedType || types[Math.floor(Math.random() * types.length)];
+            const deer = createArticulatedDeer(type, idx);
+
+            let rx = 0, rz = 0, y = 0;
+            for (let attempt = 0; attempt < 40; attempt++) {
+                rx = (Math.random() - 0.5) * (config.worldSize * 0.55);
+                rz = (Math.random() - 0.5) * (config.worldSize * 0.55);
+                y = getTerrainHeightWasm(rx, rz);
+                if (y > config.waterLevel + 0.8 && y < 9.5) break;
+            }
+
+            const b = deer.userData.f32Base;
+            wasmF32[b + 0] = rx;                         // x
+            wasmF32[b + 1] = y;                          // y
+            wasmF32[b + 2] = rz;                         // z
+            wasmF32[b + 3] = Math.random() * Math.PI * 2;// heading
+            wasmF32[b + 4] = wasmF32[b + 3];             // targetHeading
+            wasmF32[b + 5] = 0.0;                        // speed
+            wasmF32[b + 6] = 0.0;                        // targetSpeed
+            wasmF32[b + 7] = Math.random() * Math.PI * 2;// walkCycle
+            wasmF32[b + 8] = 1.0;                        // state (1=grazing)
+            wasmF32[b + 9] = 2.0 + Math.random() * 5.0;  // stateTimer
+            wasmF32[b + 10] = rx + (Math.random() - 0.5) * 18; // targetX
+            wasmF32[b + 11] = rz + (Math.random() - 0.5) * 18; // targetZ
+            wasmF32[b + 12] = 0.0;                       // normX
+            wasmF32[b + 13] = 1.0;                       // normY
+            wasmF32[b + 14] = 0.0;                       // normZ
+
+            deer.position.set(rx, y, rz);
+            creaturesGroup.add(deer);
+            deerList.push(deer);
+            updateStatsUI();
+
+            if (notify) showToast(`Allocated ${deer.userData.name} at WASM ${deer.userData.bytePtrHex}`);
+        }
+
+        function spawnBirdFlockWasm(count = 4, notify = true) {
+            const flockCenter = new THREE.Vector3(
+                (Math.random() - 0.5) * 55,
+                26 + Math.random() * 14,
+                (Math.random() - 0.5) * 55
+            );
+
+            for (let i = 0; i < count; i++) {
+                if (birdList.length >= 60) break;
+                const idx = birdList.length;
+                const bird = createArticulatedBird(idx);
+                const b = bird.userData.f32Base;
+
+                const bx = flockCenter.x + (Math.random() - 0.5) * 14;
+                const by = flockCenter.y + (Math.random() - 0.5) * 5;
+                const bz = flockCenter.z + (Math.random() - 0.5) * 14;
+
+                wasmF32[b + 0] = bx;
+                wasmF32[b + 1] = by;
+                wasmF32[b + 2] = bz;
+                wasmF32[b + 3] = (Math.random() - 0.5) * 9;
+                wasmF32[b + 4] = 0;
+                wasmF32[b + 5] = (Math.random() - 0.5) * 9;
+                wasmF32[b + 6] = Math.random() * Math.PI * 2;
+                wasmF32[b + 7] = 0.0; // 0 = flapping
+                wasmF32[b + 8] = 2.0 + Math.random() * 4.0;
+                wasmF32[b + 9] = flockCenter.x;
+                wasmF32[b + 10] = flockCenter.y;
+                wasmF32[b + 11] = flockCenter.z;
+                wasmF32[b + 12] = 0.0;
+
+                bird.position.set(bx, by, bz);
+                creaturesGroup.add(bird);
+                birdList.push(bird);
+            }
+            updateStatsUI();
+            if (notify) showToast(`Allocated ${count} birds into WASM Linear Memory`);
+        }
+
+        function startleHerdWasm() {
+            deerList.forEach(deer => {
+                const b = deer.userData.f32Base;
+                wasmF32[b + 8] = 3.0; // State 3 = Trotting
+                wasmF32[b + 6] = 5.2; // targetSpeed = 5.2 m/s
+                wasmF32[b + 9] = 4.5 + Math.random() * 3.0;
+                const angle = Math.random() * Math.PI * 2;
+                const dist = 22 + Math.random() * 18;
+                wasmF32[b + 10] = THREE.MathUtils.clamp(wasmF32[b + 0] + Math.cos(angle) * dist, -55, 55);
+                wasmF32[b + 11] = THREE.MathUtils.clamp(wasmF32[b + 2] + Math.sin(angle) * dist, -55, 55);
+            });
+            showToast("WASM Memory Impulse: Herd startled into bounding trot!");
+        }
+
+        // ============================================================================
+        // PART 3: HYBRID WASM + THREE.JS STEPPING LOOP
+        // ============================================================================
+        function stepSimulationWasmAndSync(delta, elapsedTime) {
+            const t0 = performance.now();
+
+            // 1. Update high-level AI steering targets in WASM memory, then invoke compiled WASM kinematics kernel
+            let herdX = 0, herdZ = 0;
+            if (deerList.length > 0) {
+                deerList.forEach(d => {
+                    const b = d.userData.f32Base;
+                    herdX += wasmF32[b + 0];
+                    herdZ += wasmF32[b + 2];
+                });
+                herdX /= deerList.length;
+                herdZ /= deerList.length;
+            }
+
+            deerList.forEach((deer, idx) => {
+                const b = deer.userData.f32Base;
+                wasmF32[b + 9] -= delta; // stateTimer
+
+                if (wasmF32[b + 9] <= 0) {
+                    const rand = Math.random();
+                    if (rand < 0.38) {
+                        wasmF32[b + 8] = 1.0; // grazing
+                        wasmF32[b + 6] = 0.0;
+                        wasmF32[b + 9] = 4.0 + Math.random() * 6.0;
+                    } else if (rand < 0.56) {
+                        wasmF32[b + 8] = 0.0; // idle
+                        wasmF32[b + 6] = 0.0;
+                        wasmF32[b + 9] = 2.5 + Math.random() * 4.0;
+                        deer.userData.lookAngleY = (Math.random() - 0.5) * 0.9;
+                    } else if (rand < 0.90) {
+                        wasmF32[b + 8] = 2.0; // walking
+                        wasmF32[b + 6] = 2.15;
+                        wasmF32[b + 9] = 5.0 + Math.random() * 7.0;
+                        pickWasmDeerTarget(b, herdX, herdZ, 18);
+                    } else {
+                        wasmF32[b + 8] = 3.0; // trotting
+                        wasmF32[b + 6] = 5.2;
+                        wasmF32[b + 9] = 3.5 + Math.random() * 3.5;
+                        pickWasmDeerTarget(b, herdX, herdZ, 32);
+                    }
+                }
+
+                // Steering & Water/Tree Avoidance in WASM buffer
+                const spd = wasmF32[b + 5];
+                if (spd > 0.06) {
+                    const x = wasmF32[b + 0];
+                    const z = wasmF32[b + 2];
+                    let dx = wasmF32[b + 10] - x;
+                    let dz = wasmF32[b + 11] - z;
+                    const dist = Math.hypot(dx, dz);
+
+                    if (dist < 1.8) {
+                        wasmF32[b + 8] = 1.0; // grazing
+                        wasmF32[b + 6] = 0.0;
+                        wasmF32[b + 9] = 4.0 + Math.random() * 4.0;
+                    } else {
+                        dx /= dist;
+                        dz /= dist;
+
+                        treeObstacles.forEach(obs => {
+                            const ox = x - obs.x;
+                            const oz = z - obs.z;
+                            const dSq = ox * ox + oz * oz;
+                            const minR = obs.radius + 1.4;
+                            if (dSq < minR * minR && dSq > 0.001) {
+                                const d = Math.sqrt(dSq);
+                                dx += (ox / d) * (minR - d) * 1.8;
+                                dz += (oz / d) * (minR - d) * 1.8;
+                            }
+                        });
+
+                        // Prevent walking into water or off island
+                        const aheadX = x + Math.sin(wasmF32[b + 3]) * 2.2;
+                        const aheadZ = z + Math.cos(wasmF32[b + 3]) * 2.2;
+                        const aheadY = getTerrainHeightWasm(aheadX, aheadZ);
+                        if (aheadY < config.waterLevel + 0.45 || aheadY > 13.5) {
+                            dx = -x * 0.1;
+                            dz = -z * 0.1;
+                        }
+
+                        const targetHdg = Math.atan2(dx, dz);
+                        wasmF32[b + 4] = targetHdg;
+                        let diff = targetHdg - wasmF32[b + 3];
+                        while (diff > Math.PI) diff -= Math.PI * 2;
+                        while (diff < -Math.PI) diff += Math.PI * 2;
+                        wasmF32[b + 3] += diff * Math.min(1, delta * 4.2);
+                    }
+                }
+            });
+
+            // Update Bird Boid velocity vectors in WASM buffer
+            birdList.forEach((bird, idx) => {
+                const b = bird.userData.f32Base;
+                wasmF32[b + 8] -= delta;
+                if (wasmF32[b + 8] <= 0) {
+                    wasmF32[b + 7] = wasmF32[b + 7] < 0.5 ? 1.0 : 0.0;
+                    wasmF32[b + 8] = 2.5 + Math.random() * 4.0;
+                }
+
+                const bx = wasmF32[b + 0], by = wasmF32[b + 1], bz = wasmF32[b + 2];
+                const ox = wasmF32[b + 9] - bx, oz = wasmF32[b + 11] - bz;
+                const len = Math.hypot(ox, oz) || 1;
+                const tx = -oz / len, tz = ox / len;
+
+                let steerX = ox * 0.035 + tx * 1.4;
+                let steerZ = oz * 0.035 + tz * 1.4;
+                let steerY = wasmF32[b + 7] < 0.5 ? 0.55 : -0.32;
+
+                const groundY = getTerrainHeightWasm(bx, bz);
+                if (by < Math.max(groundY + 12, 18)) {
+                    wasmF32[b + 7] = 0.0;
+                    steerY = 2.2;
+                } else if (by > 46) {
+                    wasmF32[b + 7] = 1.0;
+                    steerY = -1.5;
+                }
+
+                const pvx = wasmF32[b + 3], pvz = wasmF32[b + 5];
+                let vx = pvx + steerX * delta * 4.5;
+                let vy = wasmF32[b + 4] + steerY * delta * 4.5;
+                let vz = pvz + steerZ * delta * 4.5;
+
+                const spd = wasmF32[b + 7] < 0.5 ? 10.5 : 12.2;
+                const vLen = Math.hypot(vx, vy, vz) || 1;
+                vx = (vx / vLen) * spd;
+                vy = (vy / vLen) * spd;
+                vz = (vz / vLen) * spd;
+
+                wasmF32[b + 3] = vx;
+                wasmF32[b + 4] = vy;
+                wasmF32[b + 5] = vz;
+
+                const crossY = (pvx * vz - pvz * vx) / (spd * spd);
+                const targetBank = THREE.MathUtils.clamp(-crossY * 18.0, -0.75, 0.75);
+                wasmF32[b + 12] = THREE.MathUtils.lerp(wasmF32[b + 12], targetBank, delta * 5.0);
+            });
+
+            // 2. EXECUTE COMPILED WEBASSEMBLY KINEMATICS KERNELS!
+            wasmInstance.exports.stepDeerKinematics(deerList.length, delta, elapsedTime);
+            wasmInstance.exports.stepBirdFlock(birdList.length, delta, elapsedTime);
+
+            // Exponentially smooth WASM tick duration and only update DOM every 250ms
+            const rawUs = Math.max(4.2, (performance.now() - t0) * 1000);
+            smoothedWasmUs = smoothedWasmUs * 0.88 + rawUs * 0.12;
+            if (performance.now() - lastUiMetricUpdateTime > 250) {
+                document.getElementById('wasm-tick-us').innerText = `${smoothedWasmUs.toFixed(1)} μs`;
+                lastUiMetricUpdateTime = performance.now();
+            }
+
+            // 3. Apply WASM Linear Memory Joint States to Three.js Scene Graph
+            const upVec = new THREE.Vector3();
+            const forward = new THREE.Vector3();
+            const right = new THREE.Vector3();
+            const correctedForward = new THREE.Vector3();
+            const rotMatrix = new THREE.Matrix4();
+
+            deerList.forEach((deer, idx) => {
+                const b = deer.userData.f32Base;
+                const j = deer.userData.joints;
+
+                deer.position.set(wasmF32[b + 0], wasmF32[b + 1], wasmF32[b + 2]);
+
+                upVec.set(wasmF32[b + 12], wasmF32[b + 13], wasmF32[b + 14]).normalize();
+                const hdg = wasmF32[b + 3];
+                forward.set(Math.sin(hdg), 0, Math.cos(hdg));
+                right.crossVectors(upVec, forward).normalize();
+                correctedForward.crossVectors(right, upVec).normalize();
+                rotMatrix.makeBasis(right, upVec, correctedForward);
+                deer.quaternion.setFromRotationMatrix(rotMatrix);
+
+                // Read 8 Multi-Jointed Leg Angles Computed by WASM Func 5
+                j.legFL.hipPivot.rotation.x  = wasmF32[b + 15];
+                j.legFL.kneePivot.rotation.x = wasmF32[b + 16];
+                j.legFR.hipPivot.rotation.x  = wasmF32[b + 17];
+                j.legFR.kneePivot.rotation.x = wasmF32[b + 18];
+                j.legBL.hipPivot.rotation.x  = wasmF32[b + 19];
+                j.legBL.kneePivot.rotation.x = wasmF32[b + 20];
+                j.legBR.hipPivot.rotation.x  = wasmF32[b + 21];
+                j.legBR.kneePivot.rotation.x = wasmF32[b + 22];
+
+                const spd = wasmF32[b + 5];
+                const cycle = wasmF32[b + 7];
+                const state = Math.round(wasmF32[b + 8]);
+                const strideAmp = Math.min(1.0, spd / 2.4);
+
+                j.bodyPivot.position.y = 1.28 + Math.abs(Math.sin(cycle)) * 0.055 * strideAmp + Math.sin(elapsedTime * 2.4 + idx) * 0.012;
+                j.bodyPivot.rotation.x = state === 3 ? Math.sin(cycle) * 0.05 * strideAmp : 0;
+
+                if (state === 1 && spd < 0.2) {
+                    j.neckBasePivot.rotation.x = THREE.MathUtils.lerp(j.neckBasePivot.rotation.x, 1.38, delta * 3.2);
+                    const nibble = Math.sin(elapsedTime * 7.5 + idx) * 0.07;
+                    j.headPivot.rotation.x = THREE.MathUtils.lerp(j.headPivot.rotation.x, -0.58 + nibble, delta * 5.0);
+                    j.headPivot.rotation.y = THREE.MathUtils.lerp(j.headPivot.rotation.y, Math.sin(elapsedTime * 1.4 + idx) * 0.18, delta * 3.0);
+                } else if (state === 0) {
+                    j.neckBasePivot.rotation.x = THREE.MathUtils.lerp(j.neckBasePivot.rotation.x, 0.30, delta * 3.5);
+                    j.headPivot.rotation.x = THREE.MathUtils.lerp(j.headPivot.rotation.x, -0.26, delta * 3.5);
+                    j.headPivot.rotation.y = THREE.MathUtils.lerp(j.headPivot.rotation.y, deer.userData.lookAngleY, delta * 2.5);
+                } else {
+                    const targetNeckX = state === 3 ? 0.52 : 0.42;
+                    j.neckBasePivot.rotation.x = THREE.MathUtils.lerp(j.neckBasePivot.rotation.x, targetNeckX + Math.sin(cycle) * 0.05, delta * 4.5);
+                    j.headPivot.rotation.x = THREE.MathUtils.lerp(j.headPivot.rotation.x, -0.36, delta * 4.5);
+                    j.headPivot.rotation.y = THREE.MathUtils.lerp(j.headPivot.rotation.y, 0, delta * 5.0);
+                }
+
+                deer.userData.earTwitchTimer -= delta;
+                if (deer.userData.earTwitchTimer <= 0) deer.userData.earTwitchTimer = 2.0 + Math.random() * 4.5;
+                const twitch = deer.userData.earTwitchTimer < 0.25 ? Math.sin(elapsedTime * 35) * 0.35 : 0;
+                j.leftEarPivot.rotation.z = -0.65 + twitch;
+                j.rightEarPivot.rotation.z = 0.65 - twitch * 0.7;
+
+                j.tailPivot.rotation.x = THREE.MathUtils.lerp(j.tailPivot.rotation.x, state === 3 ? 0.85 : 0.0, delta * 5.0);
+                j.tailPivot.rotation.z = Math.sin(elapsedTime * 4.0 + idx) * 0.15;
+            });
+
+            birdList.forEach(bird => {
+                const b = bird.userData.f32Base;
+                const j = bird.userData.joints;
+
+                bird.position.set(wasmF32[b + 0], wasmF32[b + 1], wasmF32[b + 2]);
+                bird.lookAt(
+                    wasmF32[b + 0] + wasmF32[b + 3],
+                    wasmF32[b + 1] + wasmF32[b + 4],
+                    wasmF32[b + 2] + wasmF32[b + 5]
+                );
+
+                j.bankGroup.rotation.z = wasmF32[b + 12];
+                j.leftWing.innerPivot.rotation.z  =  wasmF32[b + 13];
+                j.rightWing.innerPivot.rotation.z = -wasmF32[b + 13];
+                j.leftWing.outerPivot.rotation.z  =  wasmF32[b + 14];
+                j.rightWing.outerPivot.rotation.z = -wasmF32[b + 14];
+                j.bankGroup.position.y            =  wasmF32[b + 15];
+            });
+        }
+
+        function pickWasmDeerTarget(b, herdX, herdZ, radius) {
+            for (let i = 0; i < 15; i++) {
+                const ax = THREE.MathUtils.lerp(wasmF32[b + 0], herdX, 0.35);
+                const az = THREE.MathUtils.lerp(wasmF32[b + 2], herdZ, 0.35);
+                const tx = ax + (Math.random() - 0.5) * radius * 2;
+                const tz = az + (Math.random() - 0.5) * radius * 2;
+                const ty = getTerrainHeightWasm(tx, tz);
+                if (ty > config.waterLevel + 0.7 && ty < 11.5 && Math.abs(tx) < config.worldSize * 0.4 && Math.abs(tz) < config.worldSize * 0.4) {
+                    wasmF32[b + 10] = tx;
+                    wasmF32[b + 11] = tz;
+                    return;
+                }
+            }
+        }
+
+        // ============================================================================
+        // PART 4: CAMERA TRACKING, WASM INSPECTOR & UI EVENTS
+        // ============================================================================
+        function toggleWasmInspector() {
+            const modal = document.getElementById('wasm-inspector-modal');
+            modal.classList.toggle('hidden');
+            if (!modal.classList.contains('hidden')) {
+                updateWasmInspectorUI();
+            }
+        }
+
+        function updateWasmInspectorUI() {
+            const modal = document.getElementById('wasm-inspector-modal');
+            if (modal.classList.contains('hidden')) return;
+
+            let html = `<div class="text-violet-300 font-semibold">[0x0000] Global WASM Sim Config:</div>`;
+            html += `<div class="grid grid-cols-2 gap-x-2 text-[10px] bg-slate-900/90 p-1.5 rounded border border-slate-800">
+                <div>heightScale: <span class="text-cyan-300">${wasmF32[0].toFixed(2)}</span></div>
+                <div>seedOffset: <span class="text-cyan-300">${wasmF32[1].toFixed(2)}</span></div>
+                <div>normalScratch: <span class="text-emerald-300">(${wasmF32[4].toFixed(2)}, ${wasmF32[5].toFixed(2)}, ${wasmF32[6].toFixed(2)})</span></div>
+                <div>waterLevel: <span class="text-cyan-300">${wasmF32[2].toFixed(2)}m</span></div>
+            </div>`;
+
+            const stateNames = ['IDLE', 'GRAZING', 'WALKING', 'TROTTING'];
+            for (let i = 0; i < Math.min(4, deerList.length); i++) {
+                const d = deerList[i];
+                const b = d.userData.f32Base;
+                const st = stateNames[Math.round(wasmF32[b + 8])] || 'IDLE';
+                html += `<div class="text-amber-300 font-semibold mt-1">[${d.userData.bytePtrHex}] ${d.userData.name} Struct (24x f32):</div>`;
+                html += `<div class="bg-slate-900/90 p-1.5 rounded border border-slate-800 text-[10px] space-y-0.5">
+                    <div class="flex justify-between"><span>pos(x,y,z):</span><span class="text-cyan-200">(${wasmF32[b].toFixed(1)}, ${wasmF32[b+1].toFixed(1)}, ${wasmF32[b+2].toFixed(1)})</span></div>
+                    <div class="flex justify-between"><span>state / spd:</span><span class="text-emerald-300">${st} | ${wasmF32[b+5].toFixed(2)} m/s</span></div>
+                    <div class="flex justify-between"><span>hipFL / kneeFL:</span><span class="text-violet-300">${wasmF32[b+15].toFixed(2)}r / ${wasmF32[b+16].toFixed(2)}r</span></div>
+                </div>`;
+            }
+
+            if (birdList.length > 0) {
+                const bird = birdList[0];
+                const b = bird.userData.f32Base;
+                html += `<div class="text-sky-300 font-semibold mt-1">[${bird.userData.bytePtrHex}] ${bird.userData.name} Struct (16x f32):</div>`;
+                html += `<div class="bg-slate-900/90 p-1.5 rounded border border-slate-800 text-[10px] space-y-0.5">
+                    <div class="flex justify-between"><span>pos(x,y,z):</span><span class="text-cyan-200">(${wasmF32[b].toFixed(1)}, ${wasmF32[b+1].toFixed(1)}, ${wasmF32[b+2].toFixed(1)})</span></div>
+                    <div class="flex justify-between"><span>wing(in/out):</span><span class="text-violet-300">${wasmF32[b+13].toFixed(2)}r / ${wasmF32[b+14].toFixed(2)}r</span></div>
+                </div>`;
+            }
+
+            document.getElementById('wasm-memory-dump').innerHTML = html;
+        }
+
+        function setCameraMode(mode, specificIndex = null) {
+            cameraMode = mode;
+            isTargetInitialized = false;
+
+            ['free', 'deer', 'bird'].forEach(m => {
+                document.getElementById(`cam-btn-${m}`).classList.toggle('active-cam-btn', m === mode);
+            });
+
+            const telemetryBox = document.getElementById('creature-telemetry');
+
+            if (mode === 'free') {
+                document.getElementById('cam-label').innerText = 'Free Orbit';
+                telemetryBox.classList.add('hidden');
+                controls.minDistance = 2.5;
+                controls.maxDistance = 220;
+            } else if (mode === 'deer' && deerList.length > 0) {
+                followedIndex = specificIndex !== null ? specificIndex : (followedIndex % deerList.length);
+                const targetDeer = deerList[followedIndex];
+                document.getElementById('cam-label').innerText = targetDeer.userData.name;
+                telemetryBox.classList.remove('hidden');
+                updateCreatureTelemetryDOM(targetDeer);
+
+                const offset = new THREE.Vector3(-4.5, 2.6, 5.5);
+                camera.position.copy(targetDeer.position).add(offset);
+                controls.target.copy(targetDeer.position).add(new THREE.Vector3(0, 1.4, 0));
+                previousTargetPos.copy(controls.target);
+                isTargetInitialized = true;
+            } else if (mode === 'bird' && birdList.length > 0) {
+                followedIndex = specificIndex !== null ? specificIndex : (followedIndex % birdList.length);
+                const targetBird = birdList[followedIndex];
+                document.getElementById('cam-label').innerText = targetBird.userData.name;
+                telemetryBox.classList.remove('hidden');
+                updateCreatureTelemetryDOM(targetBird);
+
+                const offset = new THREE.Vector3(0, 2.2, -5.5);
+                camera.position.copy(targetBird.position).add(offset);
+                controls.target.copy(targetBird.position);
+                previousTargetPos.copy(controls.target);
+                isTargetInitialized = true;
+            }
+        }
+
+        function cycleFollowedTarget() {
+            if (cameraMode === 'free') {
+                setCameraMode('deer', 0);
+                return;
+            }
+            const list = cameraMode === 'deer' ? deerList : birdList;
+            if (list.length === 0) return;
+            followedIndex = (followedIndex + 1) % list.length;
+            setCameraMode(cameraMode, followedIndex);
+            showToast(`Tracking ${list[followedIndex].userData.name}`);
+        }
+
+        let lastTelemetryDomUpdate = 0;
+
+        function updateCreatureTelemetryDOM(targetCreature) {
+            const d = targetCreature.userData;
+            const b = d.f32Base;
+            document.getElementById('telemetry-title').innerText = d.name;
+            document.getElementById('telemetry-ptr').innerText = d.bytePtrHex;
+
+            if (cameraMode === 'deer') {
+                const stateNames = ['IDLE (0)', 'GRAZING (1)', 'WALKING (2)', 'TROTTING (3)'];
+                const stIdx = Math.round(wasmF32[b + 8]);
+                document.getElementById('telemetry-state').innerText = stateNames[stIdx] || 'IDLE (0)';
+                document.getElementById('telemetry-speed').innerText = `${wasmF32[b + 5].toFixed(2)} m/s`;
+                const slopeDeg = Math.round(Math.acos(THREE.MathUtils.clamp(wasmF32[b + 13], -1, 1)) * (180 / Math.PI));
+                document.getElementById('telemetry-alt').innerText = `${wasmF32[b + 1].toFixed(1)}m (${slopeDeg}° slope)`;
+                document.getElementById('telemetry-phase').innerText = `${(wasmF32[b + 7] % 6.28).toFixed(2)} rad`;
+            } else {
+                const stIdx = Math.round(wasmF32[b + 7]);
+                document.getElementById('telemetry-state').innerText = stIdx === 0 ? 'FLAPPING (0)' : 'GLIDING (1)';
+                const spd = Math.hypot(wasmF32[b + 3], wasmF32[b + 4], wasmF32[b + 5]);
+                document.getElementById('telemetry-speed').innerText = `${spd.toFixed(2)} m/s`;
+                const bankDeg = Math.round(wasmF32[b + 12] * 45);
+                document.getElementById('telemetry-alt').innerText = `${wasmF32[b + 1].toFixed(1)}m (${bankDeg}° bank)`;
+                document.getElementById('telemetry-phase').innerText = `${(wasmF32[b + 6] % 6.28).toFixed(2)} rad`;
+            }
+        }
+
+        function updateCameraFollow(delta) {
+            if (cameraMode === 'free') return;
+
+            const list = cameraMode === 'deer' ? deerList : birdList;
+            if (list.length === 0) return;
+
+            const targetCreature = list[followedIndex % list.length];
+            const desiredFocus = targetCreature.position.clone();
+            if (cameraMode === 'deer') desiredFocus.y += 1.35;
+
+            if (!isTargetInitialized) {
+                previousTargetPos.copy(desiredFocus);
+                isTargetInitialized = true;
+            }
+
+            const smoothedFocus = previousTargetPos.clone().lerp(desiredFocus, Math.min(1, delta * 8.5));
+            const moveDelta = new THREE.Vector3().subVectors(smoothedFocus, controls.target);
+            camera.position.add(moveDelta);
+            controls.target.copy(smoothedFocus);
+            previousTargetPos.copy(smoothedFocus);
+
+            // Throttle telemetry text updates to 250ms (4Hz) to eliminate visual jitter
+            const now = performance.now();
+            if (now - lastTelemetryDomUpdate > 250) {
+                updateCreatureTelemetryDOM(targetCreature);
+                lastTelemetryDomUpdate = now;
+            }
+        }
+
+        function onCanvasPointerDown(event) {
+            const rect = renderer.domElement.getBoundingClientRect();
+            mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(creaturesGroup.children, true);
+
+            if (intersects.length > 0) {
+                const root = intersects[0].object.userData.creatureRoot;
+                if (root && root.userData.isCreature) {
+                    if (root.userData.species === 'deer') {
+                        const idx = deerList.indexOf(root);
+                        if (idx !== -1) {
+                            setCameraMode('deer', idx);
+                            showToast(`Inspecting ${root.userData.name} at WASM ${root.userData.bytePtrHex}`);
+                        }
+                    } else if (root.userData.species === 'bird') {
+                        const idx = birdList.indexOf(root);
+                        if (idx !== -1) {
+                            setCameraMode('bird', idx);
+                            showToast(`Inspecting ${root.userData.name} at WASM ${root.userData.bytePtrHex}`);
+                        }
+                    }
+                }
+            }
+        }
+
+        function generateClouds() {
+            const cloudMat = new THREE.MeshStandardMaterial({
+                color: 0xffffff,
+                roughness: 0.92,
+                transparent: true,
+                opacity: 0.86
+            });
+
+            for (let i = 0; i < 16; i++) {
+                const group = new THREE.Group();
+                const puffs = 4 + Math.floor(Math.random() * 4);
+                for (let p = 0; p < puffs; p++) {
+                    const puff = new THREE.Mesh(new THREE.DodecahedronGeometry(3.5 + Math.random() * 3.5, 1), cloudMat);
+                    puff.position.set((p - puffs / 2) * 4.2, (Math.random() - 0.5) * 1.6, (Math.random() - 0.5) * 3.0);
+                    puff.scale.y = 0.62;
+                    group.add(puff);
+                }
+                group.position.set(
+                    (Math.random() - 0.5) * config.worldSize * 1.6,
+                    48 + Math.random() * 16,
+                    (Math.random() - 0.5) * config.worldSize * 1.6
+                );
+                cloudsGroup.add(group);
+            }
+        }
+
+        function updateLightingAndSky() {
+            const time = config.timeOfDay;
+            const angle = ((time - 6) / 24) * Math.PI * 2;
+            const r = 150;
+
+            sunLight.position.set(Math.cos(angle) * r, Math.sin(angle) * r, 45);
+
+            let skyCol = new THREE.Color();
+            let fogCol = new THREE.Color();
+            let sunInt = 1.2;
+            let ambInt = 0.45;
+            let starOpacity = 0;
+
+            if (time >= 5.5 && time < 7.8) {
+                skyCol.setHex(0xfdba74);
+                fogCol.setHex(0xe29578);
+                sunLight.color.setHex(0xffedd5);
+                sunInt = 0.95;
+                ambInt = 0.42;
+            } else if (time >= 7.8 && time <= 17.2) {
+                skyCol.setHex(0x60a5fa);
+                fogCol.setHex(0x93c5fd);
+                sunLight.color.setHex(0xfffbeb);
+                sunInt = 1.35;
+                ambInt = 0.52;
+            } else if (time > 17.2 && time <= 19.5) {
+                skyCol.setHex(0xf43f5e);
+                fogCol.setHex(0x881337);
+                sunLight.color.setHex(0xfda4af);
+                sunInt = 0.85;
+                ambInt = 0.35;
+                starOpacity = 0.3;
+            } else {
+                skyCol.setHex(0x070b14);
+                fogCol.setHex(0x0f172a);
+                sunLight.color.setHex(0x818cf8);
+                sunInt = 0.28;
+                ambInt = 0.22;
+                starOpacity = 0.9;
+            }
+
+            scene.background.copy(skyCol);
+            scene.fog.color.copy(fogCol);
+            sunLight.intensity = sunInt;
+            ambientLight.intensity = ambInt;
+            if (starsPoints) starsPoints.material.opacity = starOpacity;
+
+            const hrs = Math.floor(time) % 24;
+            const mins = Math.floor((time - Math.floor(time)) * 60);
+            const ampm = hrs >= 12 ? 'PM' : 'AM';
+            const dispHrs = hrs % 12 === 0 ? 12 : hrs % 12;
+            document.getElementById('val-time').innerText = `${dispHrs}:${mins < 10 ? '0' : ''}${mins} ${ampm}`;
+            document.getElementById('time-slider').value = time;
+        }
+
+        function setTimeOfDay(val) {
+            config.timeOfDay = val;
+            updateLightingAndSky();
+        }
+
+        function spawnObject(type) {
+            const rx = (Math.random() - 0.5) * (config.worldSize * 0.55);
+            const rz = (Math.random() - 0.5) * (config.worldSize * 0.55);
+            const y = getTerrainHeightWasm(rx, rz);
+
+            if (type === 'tree') {
+                const trunkMat = new THREE.MeshStandardMaterial({ color: 0x4a3525, roughness: 0.9 });
+                const foliageMat = new THREE.MeshStandardMaterial({ color: 0x15803d, roughness: 0.8 });
+                const tree = createDetailedTree(Math.random() > 0.5, trunkMat, foliageMat, foliageMat, foliageMat);
+                tree.position.set(rx, Math.max(config.waterLevel + 0.2, y), rz);
+                treesGroup.add(tree);
+                updateStatsUI();
+                showToast("Planted new tree on WASM terrain");
+            } else if (type === 'crystal') {
+                const crystal = new THREE.Mesh(
+                    new THREE.OctahedronGeometry(1.1, 0),
+                    new THREE.MeshStandardMaterial({ color: 0x38bdf8, emissive: 0x0284c7, emissiveIntensity: 0.7, roughness: 0.15 })
+                );
+                crystal.position.set(rx, Math.max(config.waterLevel + 0.5, y + 1.0), rz);
+                crystal.userData = { baseY: crystal.position.y, phase: Math.random() * 6 };
+                crystalsGroup.add(crystal);
+                showToast("Spawned glowing highland crystal");
+            }
+        }
+
+        function regenerateTerrain() {
+            config.seedOffset = Math.random() * 100;
+            generateTerrainWasm();
+            deerList.forEach(deer => {
+                const b = deer.userData.f32Base;
+                wasmF32[b + 1] = getTerrainHeightWasm(wasmF32[b + 0], wasmF32[b + 2]);
+            });
+            showToast("Reseeded WASM terrain heightfield");
+        }
+
+        function updateStatsUI() {
+            document.getElementById('stat-deer').innerText = deerList.length;
+            document.getElementById('stat-birds').innerText = birdList.length;
+            document.getElementById('stat-trees').innerText = treesGroup.children.length;
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toast-message').innerText = msg;
+            toast.classList.remove('translate-y-12', 'opacity-0');
+            clearTimeout(toast.hideTimeout);
+            toast.hideTimeout = setTimeout(() => {
+                toast.classList.add('translate-y-12', 'opacity-0');
+            }, 2800);
+        }
+
+        function setupEventListeners() {
+            document.getElementById('time-slider').addEventListener('input', e => {
+                config.timeOfDay = parseFloat(e.target.value);
+                updateLightingAndSky();
+            });
+
+            const heightSlider = document.getElementById('terrain-height-slider');
+            heightSlider.addEventListener('input', e => {
+                config.heightScale = parseFloat(e.target.value);
+                document.getElementById('val-height').innerText = `${config.heightScale.toFixed(1)}x`;
+            });
+            heightSlider.addEventListener('change', () => regenerateTerrain());
+
+            const treeSlider = document.getElementById('tree-density-slider');
+            treeSlider.addEventListener('input', e => {
+                config.treeDensity = parseInt(e.target.value);
+                document.getElementById('val-trees').innerText = config.treeDensity;
+            });
+            treeSlider.addEventListener('change', () => populateFloraAndRocks());
+
+            document.getElementById('toggle-autotime').addEventListener('change', e => {
+                config.autoTime = e.target.checked;
+            });
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        let frameCount = 0;
+        let lastFpsTime = 0;
+        let lastMemDumpTime = 0;
+
+        function animate(now = 0) {
+            requestAnimationFrame(animate);
+
+            const delta = Math.min(clock.getDelta(), 0.1);
+            const elapsedTime = clock.getElapsedTime();
+
+            frameCount++;
+            if (now - lastFpsTime > 1000) {
+                document.getElementById('fps-counter').innerText = `${Math.round((frameCount * 1000) / (now - lastFpsTime))} FPS`;
+                frameCount = 0;
+                lastFpsTime = now;
+            }
+
+            if (config.autoTime) {
+                config.timeOfDay = (config.timeOfDay + delta * 0.25) % 24;
+                updateLightingAndSky();
+            }
+
+            if (waterMesh) {
+                const pos = waterMesh.geometry.attributes.position;
+                for (let i = 0; i < pos.count; i++) {
+                    const vx = pos.getX(i);
+                    const vz = pos.getZ(i);
+                    const wave = Math.sin(vx * 0.12 + elapsedTime * 2.0) * 0.09 + Math.cos(vz * 0.14 + elapsedTime * 1.6) * 0.08;
+                    pos.setY(i, wave);
+                }
+                pos.needsUpdate = true;
+                waterMesh.geometry.computeVertexNormals();
+            }
+
+            // Step Compiled WebAssembly Simulation & Sync Joint Buffers
+            stepSimulationWasmAndSync(delta, elapsedTime);
+
+            if (now - lastMemDumpTime > 120) {
+                updateWasmInspectorUI();
+                lastMemDumpTime = now;
+            }
+
+            cloudsGroup.children.forEach((c, i) => {
+                c.position.x += delta * (1.2 + (i % 3) * 0.4);
+                if (c.position.x > config.worldSize * 0.85) c.position.x = -config.worldSize * 0.85;
+            });
+
+            crystalsGroup.children.forEach(cr => {
+                cr.position.y = cr.userData.baseY + Math.sin(elapsedTime * 2.0 + cr.userData.phase) * 0.25;
+                cr.rotation.y += delta * 0.6;
+            });
+
+            updateCameraFollow(delta);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+    </script>
+</body>
+</html>
