@@ -7,3 +7,5 @@ license.workspace = true
 [dependencies]
 sim = { path = "../sim" }
 bevy = "0.20"
+# Immediate-mode GUI (egui) inside Bevy, for the HUD.
+bevy_egui = "0.43"

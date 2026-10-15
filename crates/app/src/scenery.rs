@@ -5,19 +5,25 @@
 //! in `index.html`.
 
 use bevy::{asset::RenderAssetUsages, light::NotShadowCaster, mesh::PrimitiveTopology, prelude::*};
-use sim::{TreeKind, scenery::Tree};
+use sim::{
+    Scenery, TreeKind,
+    scenery::{Crystal, Tree},
+};
 
 use crate::{
+    deer::HerdState,
     rig::{Rig, at},
-    terrain::{IslandScenery, IslandTerrain},
+    terrain::{IslandEdit, IslandScenery, IslandTerrain, SCENERY_SEED, TreeCount},
 };
 
 pub struct SceneryPlugin;
 
 impl Plugin for SceneryPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, spawn_scenery)
-            .add_systems(Update, (animate_crystals, drift_clouds));
+        app.add_systems(Startup, spawn_scenery).add_systems(
+            Update,
+            (apply_island_edits, animate_crystals, drift_clouds).chain(),
+        );
     }
 }
 
@@ -45,7 +51,9 @@ const OAK_PUFFS: [(f32, f32, f32, f32); 5] = [
     (0.6, 3.6, -0.7, 1.1),
 ];
 
-/// Meshes and materials for everything in the scenery, built once.
+/// Meshes and materials for everything in the scenery, built once. A `Resource`,
+/// so rebuilds and planted trees reuse them.
+#[derive(Resource)]
 struct SceneryAssets {
     trunk: Handle<Mesh>,
     /// One cone mesh per pine tier, matching `PINE_TIERS`.
@@ -182,22 +190,40 @@ fn spawn_scenery(
     scenery: Res<IslandScenery>,
 ) {
     let assets = SceneryAssets::new(&mut meshes, &mut materials);
-    let scenery = &scenery.0;
+    let groups = spawn_all(&mut commands, &assets, &scenery.0);
+    commands.insert_resource(assets);
+    commands.insert_resource(groups);
+}
 
-    // One parent per category keeps the entity list tidy and lets a whole category
-    // be hidden or despawned at once.
-    let group = |commands: &mut Commands, name: &'static str| {
+/// The parent entity of each category. One parent per category keeps the entity
+/// list tidy, and despawning a parent despawns all of its children too.
+#[derive(Resource)]
+struct SceneryGroups {
+    trees: Entity,
+    crystals: Entity,
+    /// Every group, for despawning the lot on a rebuild.
+    all: [Entity; 5],
+}
+
+/// Spawns entities for everything in `scenery`, under fresh group parents.
+fn spawn_all(commands: &mut Commands, assets: &SceneryAssets, scenery: &Scenery) -> SceneryGroups {
+    let mut group = |name: &'static str| {
         commands
             .spawn((Name::new(name), Transform::default(), Visibility::default()))
             .id()
     };
+    let (trees, rocks, grass, crystals, clouds) = (
+        group("Trees"),
+        group("Rocks"),
+        group("Grass"),
+        group("Crystals"),
+        group("Clouds"),
+    );
 
-    let trees = group(&mut commands, "Trees");
     for tree in &scenery.trees {
-        spawn_tree(&mut commands, &assets, trees, tree);
+        spawn_tree(commands, assets, trees, tree);
     }
 
-    let rocks = group(&mut commands, "Rocks");
     for rock in &scenery.rocks {
         let r = rock.rotation;
         commands.spawn((
@@ -212,7 +238,6 @@ fn spawn_scenery(
         ));
     }
 
-    let grass = group(&mut commands, "Grass");
     for tuft in &scenery.grass {
         let tuft_entity = commands
             .spawn((
@@ -222,7 +247,8 @@ fn spawn_scenery(
             ))
             .id();
         let mut rig = Rig {
-            commands: &mut commands,
+            commands: &mut *commands,
+            pickable: false,
         };
         for blade in &tuft.blades {
             let r = blade.rotation;
@@ -239,19 +265,10 @@ fn spawn_scenery(
         }
     }
 
-    let crystals = group(&mut commands, "Crystals");
     for (id, crystal) in scenery.crystals.iter().enumerate() {
-        commands.spawn((
-            CrystalId(id),
-            Mesh3d(assets.crystal.clone()),
-            MeshMaterial3d(assets.crystal_glow.clone()),
-            Transform::from_translation(crystal.position).with_scale(crystal.scale),
-            NotShadowCaster,
-            ChildOf(crystals),
-        ));
+        spawn_crystal(commands, assets, crystals, id, crystal);
     }
 
-    let clouds = group(&mut commands, "Clouds");
     for (id, cloud) in scenery.clouds.iter().enumerate() {
         let cloud_entity = commands
             .spawn((
@@ -275,6 +292,67 @@ fn spawn_scenery(
             ));
         }
     }
+
+    SceneryGroups {
+        trees,
+        crystals,
+        all: [trees, rocks, grass, crystals, clouds],
+    }
+}
+
+fn spawn_crystal(
+    commands: &mut Commands,
+    assets: &SceneryAssets,
+    parent: Entity,
+    id: usize,
+    crystal: &Crystal,
+) {
+    commands.spawn((
+        CrystalId(id),
+        Mesh3d(assets.crystal.clone()),
+        MeshMaterial3d(assets.crystal_glow.clone()),
+        Transform::from_translation(crystal.position).with_scale(crystal.scale),
+        NotShadowCaster,
+        ChildOf(parent),
+    ));
+}
+
+/// Handles the HUD's island edits: re-scatter everything after a terrain change,
+/// or add one tree or crystal. Keeps the deer's obstacle list in step.
+#[allow(clippy::too_many_arguments)] // A system that coordinates several resources.
+fn apply_island_edits(
+    mut edits: MessageReader<IslandEdit>,
+    mut commands: Commands,
+    assets: Res<SceneryAssets>,
+    mut groups: ResMut<SceneryGroups>,
+    mut scenery: ResMut<IslandScenery>,
+    island: Res<IslandTerrain>,
+    tree_count: Res<TreeCount>,
+    mut herd: ResMut<HerdState>,
+) {
+    for edit in edits.read() {
+        match edit {
+            IslandEdit::Rebuild => {
+                for group in groups.all {
+                    commands.entity(group).despawn(); // Recursive: children go too.
+                }
+                scenery.0 = Scenery::generate(&island.0, tree_count.0, SCENERY_SEED);
+                *groups = spawn_all(&mut commands, &assets, &scenery.0);
+            }
+            IslandEdit::PlantTree => {
+                let tree = scenery.0.plant_tree(&island.0);
+                spawn_tree(&mut commands, &assets, groups.trees, &tree);
+            }
+            IslandEdit::GrowCrystal => {
+                let crystal = scenery.0.grow_crystal(&island.0);
+                let id = scenery.0.crystals.len() - 1;
+                spawn_crystal(&mut commands, &assets, groups.crystals, id, &crystal);
+            }
+        }
+        // Rebuilt or planted, the trees may have moved: refresh what deer avoid.
+        // (The original forgot to do this for planted trees.)
+        herd.0.obstacles = scenery.0.obstacles();
+    }
 }
 
 fn spawn_tree(commands: &mut Commands, assets: &SceneryAssets, parent: Entity, tree: &Tree) {
@@ -287,7 +365,10 @@ fn spawn_tree(commands: &mut Commands, assets: &SceneryAssets, parent: Entity, t
             ChildOf(parent),
         ))
         .id();
-    let mut rig = Rig { commands };
+    let mut rig = Rig {
+        commands,
+        pickable: false,
+    };
     rig.part(root, &assets.trunk, &assets.bark, at(0.0, 1.3, 0.0));
 
     match tree.kind {
@@ -318,7 +399,11 @@ fn animate_crystals(
 ) {
     let elapsed = time.elapsed_secs();
     for (id, mut transform) in &mut crystals {
-        let crystal = &scenery.0.crystals[id.0];
+        // `get` rather than `[]`: right after a rebuild, an old entity may still
+        // carry an index the new scenery doesn't have.
+        let Some(crystal) = scenery.0.crystals.get(id.0) else {
+            continue;
+        };
         let (position, spin) = crystal.animated(elapsed);
         let r = crystal.rotation;
         transform.translation = position;
@@ -336,6 +421,8 @@ fn drift_clouds(
         .0
         .drift_clouds(&island.0, time.delta_secs().min(0.1));
     for (id, mut transform) in &mut clouds {
-        transform.translation = scenery.0.clouds[id.0].position;
+        if let Some(cloud) = scenery.0.clouds.get(id.0) {
+            transform.translation = cloud.position;
+        }
     }
 }

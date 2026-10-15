@@ -6,18 +6,20 @@
 
 use std::f32::consts::PI;
 
-use bevy::prelude::*;
+use bevy::{picking::events::PointerClick, platform::time::Instant, prelude::*};
 use sim::Flocks;
 
 use crate::{
+    camera::CameraFocus,
     rig::{Rig, at},
     terrain::IslandTerrain,
+    ui::{SimTimings, Toast},
 };
 
 /// Seed for the flocks' randomness. Change it for a different sky.
 const FLOCK_SEED: u64 = 7;
-/// Birds per flock added by the B key (the original's "+ Bird Flock" button).
-const FLOCK_SIZE: usize = 4;
+/// Birds per flock added by the B key or the HUD's "+ Bird Flock" button.
+pub const FLOCK_SIZE: usize = 4;
 const INNER_WING_LENGTH: f32 = 0.78;
 const OUTER_WING_LENGTH: f32 = 0.92;
 
@@ -44,6 +46,11 @@ pub struct FlockState(pub Flocks);
 /// Which bird in `FlockState` this rig shows.
 #[derive(Component)]
 pub struct BirdId(pub usize);
+
+/// A display name like "Hawk #3" (the original called every bird a hawk).
+pub fn bird_name(id: usize) -> String {
+    format!("Hawk #{}", id + 1)
+}
 
 /// One bird rig's moving parts.
 #[derive(Component)]
@@ -119,10 +126,33 @@ fn spawn_initial_flock(
 }
 
 /// Press B to add another flock (up to the sky's limit of 60 birds).
-fn spawn_flock_on_keypress(keys: Res<ButtonInput<KeyCode>>, mut flocks: ResMut<FlockState>) {
+fn spawn_flock_on_keypress(
+    keys: Res<ButtonInput<KeyCode>>,
+    mut flocks: ResMut<FlockState>,
+    mut toasts: MessageWriter<Toast>,
+) {
     if keys.just_pressed(KeyCode::KeyB) {
         let added = flocks.0.spawn_flock(FLOCK_SIZE);
-        info!("added {added} birds ({} in the sky)", flocks.0.birds.len());
+        toasts.write(Toast(format!(
+            "Added {added} birds ({} in the sky)",
+            flocks.0.birds.len()
+        )));
+    }
+}
+
+/// Clicking any part of a bird follows it. Same bubbling observer as the deer's.
+fn follow_clicked_bird(
+    click: On<PointerClick>,
+    ids: Query<&BirdId>,
+    mut focus: ResMut<CameraFocus>,
+    mut toasts: MessageWriter<Toast>,
+) {
+    if click.button != PointerButton::Primary || click.duration.as_secs_f32() > 0.3 {
+        return;
+    }
+    if let Ok(id) = ids.get(click.entity) {
+        *focus = CameraFocus::Bird(id.0);
+        toasts.write(Toast(format!("Following {}", bird_name(id.0))));
     }
 }
 
@@ -145,13 +175,17 @@ fn spawn_missing_rigs(
 fn spawn_rig(commands: &mut Commands, assets: &BirdAssets, id: usize) {
     let root = commands
         .spawn((
-            Name::new(format!("Bird #{}", id + 1)),
+            Name::new(bird_name(id)),
             BirdId(id),
             Transform::default(),
             Visibility::default(),
         ))
+        .observe(follow_clicked_bird)
         .id();
-    let mut rig = Rig { commands };
+    let mut rig = Rig {
+        commands,
+        pickable: true,
+    };
 
     let bank = rig.pivot(root, Transform::default());
     rig.part(
@@ -236,9 +270,16 @@ fn spawn_rig(commands: &mut Commands, assets: &BirdAssets, id: usize) {
     });
 }
 
-fn step_flocks(mut flocks: ResMut<FlockState>, island: Res<IslandTerrain>, time: Res<Time>) {
+fn step_flocks(
+    mut flocks: ResMut<FlockState>,
+    island: Res<IslandTerrain>,
+    time: Res<Time>,
+    mut timings: ResMut<SimTimings>,
+) {
     let dt = time.delta_secs().min(0.1);
+    let start = Instant::now();
     flocks.0.step(&island.0, dt);
+    timings.record_flocks(start.elapsed());
 }
 
 /// Copies each simulated bird onto its rig. Same two-query pattern as the deer:

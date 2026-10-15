@@ -15,9 +15,10 @@ mod environment;
 mod rig;
 mod scenery;
 mod terrain;
+mod ui;
 mod water;
 
-use bevy::prelude::*;
+use bevy::{picking::mesh_picking::MeshPickingSettings, prelude::*};
 
 fn main() {
     App::new()
@@ -40,6 +41,14 @@ fn main() {
             camera::OrbitCameraPlugin,
             deer::DeerPlugin,
             birds::BirdPlugin,
+            ui::HudPlugin,
         ))
+        // Clicking creatures: ray-cast only against meshes marked `Pickable` (the
+        // creature rigs), not the thousands of trees and grass blades.
+        .add_plugins(MeshPickingPlugin)
+        .insert_resource(MeshPickingSettings {
+            require_markers: true,
+            ..default()
+        })
         .run();
 }

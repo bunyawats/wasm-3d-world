@@ -10,7 +10,7 @@
 
 use std::ops::Range;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Rng {
     state: u64, // Private: callers can only change it through the methods below.
 }

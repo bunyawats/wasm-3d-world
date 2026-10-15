@@ -96,6 +96,8 @@ pub struct Scenery {
     pub grass: Vec<GrassTuft>,
     pub crystals: Vec<Crystal>,
     pub clouds: Vec<Cloud>,
+    /// For things planted later (`plant_tree`, `grow_crystal`).
+    pub rng: Rng,
 }
 
 impl Scenery {
@@ -103,13 +105,53 @@ impl Scenery {
     pub fn generate(terrain: &Terrain, tree_count: usize, seed: u64) -> Self {
         let mut rng = Rng::new(seed);
         // Each helper takes `&mut rng`, so they draw from one shared sequence.
+        // Struct fields are initialised in the order written, so `rng` (moved in
+        // last) is still usable by every call above it.
         Self {
             trees: place_trees(terrain, tree_count, &mut rng),
             rocks: place_rocks(terrain, &mut rng),
             grass: place_grass(terrain, &mut rng),
             crystals: place_crystals(terrain, &mut rng),
             clouds: place_clouds(terrain, &mut rng),
+            rng,
         }
+    }
+
+    /// Plants one more tree near the middle of the island and returns it. Port of
+    /// `spawnObject('tree')`.
+    pub fn plant_tree(&mut self, terrain: &Terrain) -> Tree {
+        let spot = random_spot(terrain, 0.55, &mut self.rng);
+        let ground = terrain
+            .height(spot.x, spot.y)
+            .max(terrain.water_level + 0.2);
+        let kind = if self.rng.f32() < 0.5 {
+            TreeKind::Oak
+        } else {
+            TreeKind::Pine
+        };
+        let tree = Tree {
+            kind,
+            position: Vec3::new(spot.x, ground, spot.y),
+            scale: 1.0,
+            yaw: self.rng.angle(),
+        };
+        self.trees.push(tree);
+        tree // `Tree` is `Copy`, so returning it after pushing a copy is fine.
+    }
+
+    /// Grows one more glowing crystal and returns it. Port of `spawnObject('crystal')`.
+    pub fn grow_crystal(&mut self, terrain: &Terrain) -> Crystal {
+        let spot = random_spot(terrain, 0.55, &mut self.rng);
+        let height = (terrain.height(spot.x, spot.y) + 1.0).max(terrain.water_level + 0.5);
+        let crystal = Crystal {
+            position: Vec3::new(spot.x, height, spot.y),
+            // The original made these 1.1 across instead of 0.9, without stretching.
+            scale: Vec3::splat(1.1 / 0.9),
+            rotation: Vec3::ZERO,
+            phase: self.rng.range(0.0..6.0),
+        };
+        self.crystals.push(crystal);
+        crystal
     }
 
     /// Everything a deer should walk around: tree trunks and boulders.
@@ -339,6 +381,14 @@ mod tests {
         scenery.clouds[0].position.x = edge - 0.01;
         scenery.drift_clouds(&terrain, 1.0);
         assert_eq!(scenery.clouds[0].position.x, -edge);
+    }
+
+    #[test]
+    fn planted_trees_become_obstacles() {
+        let (terrain, mut scenery) = scenery();
+        let before = scenery.obstacles().len();
+        scenery.plant_tree(&terrain);
+        assert_eq!(scenery.obstacles().len(), before + 1);
     }
 
     #[test]

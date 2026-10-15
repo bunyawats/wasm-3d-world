@@ -11,7 +11,7 @@ use sim::{Scenery, Surface, Terrain, scenery::DEFAULT_TREE_COUNT};
 /// Same as `config.terrainSegments` in the original.
 const TERRAIN_SEGMENTS: u32 = 96;
 /// Seed for where trees, rocks, grass, crystals and clouds go.
-const SCENERY_SEED: u64 = 31;
+pub const SCENERY_SEED: u64 = 31;
 
 pub struct TerrainPlugin;
 
@@ -24,9 +24,32 @@ impl Plugin for TerrainPlugin {
         let scenery = Scenery::generate(&terrain, DEFAULT_TREE_COUNT, SCENERY_SEED);
         app.insert_resource(IslandTerrain(terrain))
             .insert_resource(IslandScenery(scenery))
-            .add_systems(Startup, spawn_terrain);
+            .insert_resource(TreeCount(DEFAULT_TREE_COUNT))
+            .add_message::<IslandEdit>()
+            .add_systems(Startup, spawn_terrain)
+            .add_systems(Update, rebuild_terrain_mesh);
     }
 }
+
+/// A change to the island, requested by the HUD. Sent as a Bevy *message*: the
+/// sender doesn't need to know who handles it, and each owner (terrain here,
+/// scenery in `scenery.rs`) reacts to the kinds it cares about.
+#[derive(Message, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IslandEdit {
+    /// `IslandTerrain` changed (height or seed): rebuild the ground and re-scatter
+    /// everything on it.
+    Rebuild,
+    PlantTree,
+    GrowCrystal,
+}
+
+/// How many trees a rebuild scatters (the HUD's "Forest density" slider).
+#[derive(Resource)]
+pub struct TreeCount(pub usize);
+
+/// Marks the terrain mesh entity, so a rebuild can find and replace it.
+#[derive(Component)]
+struct TerrainMesh;
 
 /// The island's terrain parameters, shared by every system that needs them
 /// (the water reads `water_level`, and deer and birds read heights).
@@ -55,6 +78,7 @@ fn spawn_terrain(
 
     commands.spawn((
         Name::new("Terrain"),
+        TerrainMesh,
         Mesh3d(meshes.add(mesh)),
         MeshMaterial3d(materials.add(StandardMaterial {
             // White, because the vertex colours carry the actual colour
@@ -65,6 +89,24 @@ fn spawn_terrain(
             ..default()
         })),
     ));
+}
+
+/// On `IslandEdit::Rebuild`, regenerates the ground mesh in place. The entity and
+/// material stay; only its `Mesh3d` handle is swapped, and the old mesh is freed
+/// automatically once nothing holds its handle any more.
+fn rebuild_terrain_mesh(
+    mut edits: MessageReader<IslandEdit>,
+    island: Res<IslandTerrain>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    terrain: Single<&mut Mesh3d, With<TerrainMesh>>,
+) {
+    // `read()` drains this reader's new messages; `any` stops at the first match.
+    // (Several rebuild requests in one frame only need one rebuild.)
+    if !edits.read().any(|edit| *edit == IslandEdit::Rebuild) {
+        return;
+    }
+    let mut mesh = terrain.into_inner();
+    mesh.0 = meshes.add(build_terrain_mesh(&island.0, TERRAIN_SEGMENTS));
 }
 
 /// Builds a square grid mesh, sampling the terrain for each vertex's height and colour.

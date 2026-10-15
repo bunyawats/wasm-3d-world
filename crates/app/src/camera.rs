@@ -1,16 +1,20 @@
 //! Orbit camera, matching the original's Three.js `OrbitControls`:
 //! left-drag rotates, right-drag pans, the scroll wheel zooms, all with smoothing.
+//! It can also follow a deer or a bird (`CameraFocus`), still orbitable around it.
 
 use std::f32::consts::FRAC_PI_2;
 
 use bevy::{
     core_pipeline::tonemapping::Tonemapping,
+    ecs::system::SystemParam,
     input::mouse::{AccumulatedMouseScroll, MouseScrollUnit},
+    picking::mesh_picking::MeshPickingCamera,
     prelude::*,
     window::PrimaryWindow,
 };
+use bevy_egui::input::EguiWantsInput;
 
-use crate::{environment::FOG_COLOR, terrain::IslandTerrain};
+use crate::{birds::FlockState, deer::HerdState, environment::FOG_COLOR, terrain::IslandTerrain};
 
 const ROTATE_SPEED: f32 = 0.005; // radians per pixel dragged
 const PAN_SPEED: f32 = 0.0015; // world units per pixel, per unit of distance
@@ -27,15 +31,34 @@ const SMOOTHING_RATE: f32 = 12.0;
 const GROUND_CLEARANCE: f32 = 0.6;
 /// How far above the ground the orbit centre stays (metres).
 const TARGET_HEIGHT: f32 = 1.0;
+/// Where the camera sits relative to a creature when it starts following one
+/// (the original's offsets), and how high above a deer's hooves it looks.
+const DEER_VIEW_OFFSET: Vec3 = Vec3::new(-4.5, 2.6, 5.5);
+const BIRD_VIEW_OFFSET: Vec3 = Vec3::new(0.0, 2.2, -5.5);
+const DEER_FOCUS_HEIGHT: f32 = 1.35;
 
 pub struct OrbitCameraPlugin;
 
 impl Plugin for OrbitCameraPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, spawn_camera)
-            // `.chain()` runs these in order: read input first, then move the camera.
-            .add_systems(Update, (orbit_input, apply_orbit).chain());
+        app.init_resource::<CameraFocus>()
+            .add_systems(Startup, spawn_camera)
+            // `.chain()` runs these in order: read input, follow the focus, then
+            // move the camera.
+            .add_systems(Update, (orbit_input, follow_focus, apply_orbit).chain());
     }
+}
+
+/// What the camera is looking at.
+#[derive(Resource, Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum CameraFocus {
+    /// Free orbiting, controlled entirely by the mouse.
+    #[default]
+    Free,
+    /// Following the deer with this index in `HerdState`.
+    Deer(usize),
+    /// Following the bird with this index in `FlockState`.
+    Bird(usize),
 }
 
 /// A camera position described as "looking at `target` from `distance` away,
@@ -112,6 +135,8 @@ fn spawn_camera(mut commands: Commands, island: Res<IslandTerrain>) {
             ..default()
         },
         Transform::from_translation(orbit.eye()).looking_at(orbit.target, Vec3::Y),
+        // Lets this camera's clicks pick creatures (see `MeshPickingSettings` in main).
+        MeshPickingCamera,
         OrbitCamera {
             current: orbit,
             goal: orbit,
@@ -120,12 +145,23 @@ fn spawn_camera(mut commands: Commands, island: Res<IslandTerrain>) {
 }
 
 /// Turns mouse input into changes to the camera's goal orbit.
+/// The mouse state the camera reads, bundled into one system parameter (see
+/// `HudWorld` in `ui.rs` for how `#[derive(SystemParam)]` works).
+#[derive(SystemParam)]
+struct Mouse<'w, 's> {
+    buttons: Res<'w, ButtonInput<MouseButton>>,
+    scroll: Res<'w, AccumulatedMouseScroll>,
+    // `Single` borrows query state too, which is what the `'s` lifetime is for.
+    window: Single<'w, 's, &'static Window, With<PrimaryWindow>>,
+    /// Whether egui (the HUD) is using the pointer right now.
+    egui: Res<'w, EguiWantsInput>,
+}
+
 fn orbit_input(
     camera: Single<(&mut OrbitCamera, &Transform)>,
     island: Res<IslandTerrain>,
-    buttons: Res<ButtonInput<MouseButton>>,
-    scroll: Res<AccumulatedMouseScroll>,
-    window: Single<&Window, With<PrimaryWindow>>,
+    mouse: Mouse,
+    mut focus: ResMut<CameraFocus>,
     // `Local` is state private to this one system that survives between frames.
     // Here: where the cursor was last frame (`None` if it was outside the window).
     mut last_cursor: Local<Option<Vec2>>,
@@ -137,19 +173,29 @@ fn orbit_input(
     // How far the cursor moved since last frame, in pixels. We track the cursor
     // ourselves because raw mouse-motion events aren't reliable in the browser.
     // `match` on a tuple checks both values at once.
-    let cursor = window.cursor_position();
+    let cursor = mouse.window.cursor_position();
     let drag = match (cursor, *last_cursor) {
         (Some(now), Some(before)) => now - before,
         _ => Vec2::ZERO, // Just entered the window: no movement yet.
     };
     *last_cursor = cursor;
 
-    if buttons.pressed(MouseButton::Left) {
+    // Dragging a slider or scrolling a HUD panel shouldn't also move the camera.
+    if mouse.egui.wants_any_pointer_input() {
+        return;
+    }
+
+    if mouse.buttons.pressed(MouseButton::Left) {
         goal.yaw -= drag.x * ROTATE_SPEED;
         goal.pitch = (goal.pitch + drag.y * ROTATE_SPEED).clamp(MIN_PITCH, MAX_PITCH);
     }
 
-    if buttons.pressed(MouseButton::Right) {
+    if mouse.buttons.pressed(MouseButton::Right) && drag != Vec2::ZERO {
+        // Panning away from a followed creature means you want to look elsewhere.
+        // Only write when it changes, so `focus.is_changed()` stays meaningful.
+        if *focus != CameraFocus::Free {
+            *focus = CameraFocus::Free;
+        }
         // Slide the target in the camera's screen plane, so the ground follows the
         // cursor. The further away the camera, the bigger each pixel's worth.
         let scale = goal.distance * PAN_SPEED;
@@ -163,14 +209,49 @@ fn orbit_input(
     }
 
     // Trackpads report scrolling in pixels and mouse wheels in lines; normalise to lines.
-    let lines = match scroll.unit {
-        MouseScrollUnit::Line => scroll.delta.y,
-        MouseScrollUnit::Pixel => scroll.delta.y / 100.0,
+    let lines = match mouse.scroll.unit {
+        MouseScrollUnit::Line => mouse.scroll.delta.y,
+        MouseScrollUnit::Pixel => mouse.scroll.delta.y / 100.0,
     };
     if lines != 0.0 {
         // Multiplicative zoom feels even at every distance.
         goal.distance =
             (goal.distance * (-lines * ZOOM_SPEED).exp()).clamp(MIN_DISTANCE, MAX_DISTANCE);
+    }
+}
+
+/// While following a creature, keeps the orbit centred on it. When the focus has
+/// just changed, also jumps to the original's viewing offset for that creature.
+fn follow_focus(
+    focus: Res<CameraFocus>,
+    herd: Res<HerdState>,
+    flocks: Res<FlockState>,
+    mut camera: Single<&mut OrbitCamera>,
+) {
+    // `Option` chaining: `get` returns `None` for an out-of-range index, and `map`
+    // only runs on a `Some`. Either way the result is an `Option<(Vec3, Vec3)>`.
+    let target = match *focus {
+        CameraFocus::Free => None,
+        CameraFocus::Deer(i) => herd.0.deer.get(i).map(|deer| {
+            (
+                deer.position + Vec3::Y * DEER_FOCUS_HEIGHT,
+                DEER_VIEW_OFFSET,
+            )
+        }),
+        CameraFocus::Bird(i) => flocks
+            .0
+            .birds
+            .get(i)
+            .map(|bird| (bird.position, BIRD_VIEW_OFFSET)),
+    };
+    let Some((target, offset)) = target else {
+        return;
+    };
+
+    if focus.is_changed() {
+        camera.goal = Orbit::looking_from(target + offset, target);
+    } else {
+        camera.goal.target = target;
     }
 }
 

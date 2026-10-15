@@ -23,7 +23,9 @@ Commands:
 - `cargo test` (single test: `cargo test -p sim --test terrain_parity height_matches`)
 - `cargo fmt && cargo clippy --all-targets -- -D warnings`
 - `node tools/dump_{terrain,deer,bird}_reference.mjs` regenerate the parity fixtures
-- Keys in the app: S startles the herd, B adds a bird flock, T starts or stops the day/night clock, and `[` / `]` step the hour back or forward. On-screen controls come with the HUD (milestone 7).
+- HUD (`crates/app/src/ui.rs`): egui via `bevy_egui` 0.43 (Bevy 0.20, egui 0.36). Its API changes often, so check `~/.cargo/registry/src/*/bevy_egui-0.43.1/examples/`. The UI only *expresses intent*: it mutates sim resources (`HerdState`, `FlockState`, `WorldClock`, `CameraFocus`) or sends `IslandEdit` messages (handled in `terrain.rs`/`scenery.rs`) and `Toast` messages. Widgets edit copies and write back only on `.changed()`, so change detection on those resources stays meaningful. The camera ignores the pointer while `EguiWantsInput::wants_any_pointer_input()`.
+- Clicking a creature: `MeshPickingSettings { require_markers: true }`, with `MeshPickingCamera` on the camera and `Pickable` on rig meshes (`Rig { pickable: true }`). Clicks bubble up to an observer on each rig root.
+- Keys in the app: S startles the herd, B adds a bird flock, T starts or stops the day/night clock, and `[` / `]` step the hour back or forward. The same actions are on the HUD.
 - Browser checks: Bevy only steps while the tab is visible. If `document.visibilityState` is `hidden` (for example, the automation window is behind other windows), `requestAnimationFrame` never fires and the scene looks frozen even though nothing is wrong.
 - `cargo run -p app` runs the Bevy app natively
 - `cd crates/app && trunk serve --port 8080` builds to WASM and serves at http://127.0.0.1:8080 with live rebuild. The first build takes about 4 minutes; rebuilds take seconds. `crates/app/Trunk.toml` adds `../sim` to the watch list; without it, edits to `sim` don't trigger a rebuild, and Trunk needs a restart to pick up config changes.

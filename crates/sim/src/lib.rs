@@ -21,7 +21,7 @@ pub use bird::{Bird, Flight, Flocks, MAX_BIRDS};
 pub use brain::{Obstacle, TROT_SPEED, WALK_SPEED};
 pub use daylight::{Clock, Daylight, Phase};
 pub use deer::{Behaviour, Deer, DeerKind, Leg, Legs, Pose};
-pub use herd::Herd;
+pub use herd::{Herd, MAX_DEER};
 pub use rng::Rng;
 pub use scenery::{Scenery, TreeKind};
 pub use terrain::{Surface, Terrain};

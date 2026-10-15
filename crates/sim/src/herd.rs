@@ -18,6 +18,9 @@ const INITIAL_HERD: [DeerKind; 9] = [
     DeerKind::Fawn,
 ];
 
+/// Most deer the original's memory had room for.
+pub const MAX_DEER: usize = 60;
+
 #[derive(Debug, Clone)]
 pub struct Herd {
     pub deer: Vec<Deer>,
@@ -75,6 +78,24 @@ impl Herd {
         }
     }
 
+    /// Adds one deer at a random grassy spot. `kind: None` picks a random kind.
+    /// Returns the new deer's index, or `None` if the herd is already full.
+    pub fn spawn(&mut self, terrain: &Terrain, kind: Option<DeerKind>) -> Option<usize> {
+        if self.deer.len() >= MAX_DEER {
+            return None;
+        }
+        // `unwrap_or_else` runs the closure only when `kind` is `None`.
+        let kind = kind.unwrap_or_else(|| {
+            *self
+                .rng
+                .pick(&[DeerKind::Stag, DeerKind::Doe, DeerKind::Fawn])
+        });
+        let id = self.deer.len();
+        self.deer
+            .push(Deer::spawn(kind, terrain, &mut self.rng, id as f32));
+        Some(id)
+    }
+
     /// Startles the whole herd into a trot. Port of `startleHerdWasm()`.
     pub fn startle(&mut self) {
         for deer in &mut self.deer {
@@ -103,6 +124,14 @@ mod tests {
                 deer.position
             );
         }
+    }
+
+    #[test]
+    fn herd_stops_growing_at_the_cap() {
+        let terrain = Terrain::default();
+        let mut herd = Herd::initial(&terrain, 1);
+        while herd.spawn(&terrain, None).is_some() {}
+        assert_eq!(herd.deer.len(), MAX_DEER);
     }
 
     #[test]

@@ -16,6 +16,10 @@ pub fn at(x: f32, y: f32, z: f32) -> Transform {
 /// lifetimes for you; structs holding references are where you have to name them.
 pub struct Rig<'a, 'w, 's> {
     pub commands: &'a mut Commands<'w, 's>,
+    /// Whether clicks can pick these meshes (creatures yes, scenery no). Picking
+    /// only tests meshes marked `Pickable`, which keeps it cheap with ~4,000
+    /// scenery meshes around.
+    pub pickable: bool,
 }
 
 impl Rig<'_, '_, '_> {
@@ -34,12 +38,15 @@ impl Rig<'_, '_, '_> {
         material: &Handle<StandardMaterial>,
         transform: Transform,
     ) {
-        self.commands.spawn((
+        let mut part = self.commands.spawn((
             Mesh3d(mesh.clone()),
             MeshMaterial3d(material.clone()),
             transform,
             ChildOf(parent),
         ));
+        if self.pickable {
+            part.insert(Pickable::default());
+        }
     }
 
     /// A mesh that is first offset by `offset`, then placed and rotated by

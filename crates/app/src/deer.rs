@@ -10,12 +10,14 @@
 
 use std::f32::consts::PI;
 
-use bevy::prelude::*;
-use sim::{DeerKind, Herd, Pose};
+use bevy::{picking::events::PointerClick, platform::time::Instant, prelude::*};
+use sim::{Deer, DeerKind, Herd, Pose};
 
 use crate::{
+    camera::CameraFocus,
     rig::{Rig, at},
     terrain::{IslandScenery, IslandTerrain},
+    ui::{SimTimings, Toast},
 };
 
 /// Seed for the herd's placement. Change it to get a different herd.
@@ -25,8 +27,16 @@ pub struct DeerPlugin;
 
 impl Plugin for DeerPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, spawn_herd)
-            .add_systems(Update, (startle_on_keypress, step_herd, sync_rigs).chain());
+        app.add_systems(Startup, spawn_herd).add_systems(
+            Update,
+            (
+                startle_on_keypress,
+                spawn_missing_rigs,
+                step_herd,
+                sync_rigs,
+            )
+                .chain(),
+        );
     }
 }
 
@@ -38,6 +48,11 @@ pub struct HerdState(pub Herd);
 /// Which deer in `HerdState` this rig shows.
 #[derive(Component)]
 pub struct DeerId(pub usize);
+
+/// A display name like "Stag #3".
+pub fn deer_name(deer: &Deer, id: usize) -> String {
+    format!("{:?} #{}", deer.kind, id + 1)
+}
 
 /// The joint entities of one rig, so the sync system can find them directly.
 ///
@@ -56,9 +71,11 @@ struct DeerRig {
     knees: [Entity; 4],
 }
 
-/// Meshes and materials shared by every deer. `Handle`s are reference-counted IDs
+/// Meshes and materials shared by every deer. A `Resource`, so deer added later
+/// (the HUD's "+ Deer" button) reuse them. `Handle`s are reference-counted IDs
 /// into Bevy's asset storage, so cloning one is cheap and all deer share the same
 /// GPU data.
+#[derive(Resource)]
 struct DeerAssets {
     torso: Handle<Mesh>,
     chest: Handle<Mesh>,
@@ -205,15 +222,58 @@ fn spawn_herd(
     island: Res<IslandTerrain>,
     scenery: Res<IslandScenery>,
 ) {
-    let assets = DeerAssets::new(&mut meshes, &mut materials);
+    commands.insert_resource(DeerAssets::new(&mut meshes, &mut materials));
     let mut herd = Herd::initial(&island.0, HERD_SEED);
     herd.obstacles = scenery.0.obstacles();
+    // Rigs are built by `spawn_missing_rigs` on the first frame, the same path
+    // that later handles deer added from the HUD.
+    commands.insert_resource(HerdState(herd));
+}
 
-    for id in 0..herd.deer.len() {
+/// Builds a rig for every simulated deer that doesn't have one yet. Deer are only
+/// ever appended, so the rigged IDs are exactly `0..number_of_rigs`.
+fn spawn_missing_rigs(
+    mut commands: Commands,
+    mut herd: ResMut<HerdState>,
+    assets: Res<DeerAssets>,
+    rigs: Query<(), With<DeerId>>,
+) {
+    let rigged = rigs.iter().len();
+    // Check first, so `herd` is only borrowed mutably (marked changed) when needed.
+    if rigged == herd.0.deer.len() {
+        return;
+    }
+    let herd = &mut herd.0;
+    for id in rigged..herd.deer.len() {
         let kind = herd.deer[id].kind;
         spawn_rig(&mut commands, &assets, &mut herd.rng, id, kind);
     }
-    commands.insert_resource(HerdState(herd));
+}
+
+/// Clicking any part of a deer follows it with the camera.
+///
+/// This is an *observer*: a system that runs when an event reaches the entity it
+/// watches. Clicks start on the mesh that was hit and *bubble up* through its
+/// parents, so watching only the rig's root catches clicks on every body part.
+fn follow_clicked_deer(
+    click: On<PointerClick>,
+    ids: Query<&DeerId>,
+    herd: Res<HerdState>,
+    mut focus: ResMut<CameraFocus>,
+    mut toasts: MessageWriter<Toast>,
+) {
+    // A long press is the end of an orbit drag, not a click.
+    if click.button != PointerButton::Primary || click.duration.as_secs_f32() > 0.3 {
+        return;
+    }
+    // While bubbling, `click.entity` is the entity currently handling it: the root.
+    let Ok(id) = ids.get(click.entity) else {
+        return;
+    };
+    *focus = CameraFocus::Deer(id.0);
+    if let Some(deer) = herd.0.deer.get(id.0) {
+        toasts.write(Toast(format!("Following {}", deer_name(deer, id.0))));
+    }
 }
 
 /// Spawns one deer's entity tree and returns the root entity.
@@ -234,11 +294,15 @@ fn spawn_rig(
             Transform::default(),
             Visibility::default(),
         ))
+        .observe(follow_clicked_deer)
         .id();
 
     // `Rig` (in `rig.rs`) is a tiny helper that spawns children of a given
     // parent, so each body part is one readable line.
-    let mut rig = Rig { commands };
+    let mut rig = Rig {
+        commands,
+        pickable: true,
+    };
 
     let body = rig.pivot(root, Transform::from_xyz(0.0, sim::deer::BODY_HEIGHT, 0.0));
     rig.part(
@@ -459,11 +523,20 @@ fn startle_on_keypress(keys: Res<ButtonInput<KeyCode>>, mut herd: ResMut<HerdSta
     }
 }
 
-fn step_herd(mut herd: ResMut<HerdState>, island: Res<IslandTerrain>, time: Res<Time>) {
+fn step_herd(
+    mut herd: ResMut<HerdState>,
+    island: Res<IslandTerrain>,
+    time: Res<Time>,
+    mut timings: ResMut<SimTimings>,
+) {
     // Clamp the time step like the original (`Math.min(delta, 0.1)`), so a long
     // pause (a backgrounded browser tab, say) can't make deer leap.
     let dt = time.delta_secs().min(0.1);
+    // `bevy::platform::time::Instant` instead of `std::time::Instant`: the std one
+    // panics in the browser, where WebAssembly has no system clock by default.
+    let start = Instant::now();
     herd.0.step(&island.0, dt, time.elapsed_secs());
+    timings.record_herd(start.elapsed());
 }
 
 /// Copies the simulation's state onto each rig's entities.
