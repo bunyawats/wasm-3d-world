@@ -1,0 +1,12 @@
+# A Cargo *workspace*: one repository, several crates that build together and share
+# a single `Cargo.lock` and `target/` directory.
+[workspace]
+resolver = "3"
+members = ["crates/sim"]
+
+# Settings that member crates opt into with `edition.workspace = true` etc.,
+# so they're declared once instead of copied into every crate.
+[workspace.package]
+edition = "2024"
+version = "0.1.0"
+license = "MIT"

@@ -1,0 +1,10 @@
+[package]
+name = "sim"
+description = "Engine-independent simulation for the low-poly island: terrain, deer, birds."
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+# No dependencies on purpose: this crate is plain Rust, so it builds and tests
+# natively in seconds and knows nothing about rendering.
+[dependencies]

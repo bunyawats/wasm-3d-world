@@ -1,0 +1,58 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project overview
+
+An interactive low-poly 3D island with deer and bird wildlife, rendered with Three.js. Its physics and kinematics run in a WebAssembly module that is **assembled byte-by-byte in JavaScript at page load**. The whole app lives in a single file, `index.html`. It is served via GitHub Pages at https://bunyawats.github.io/wasm-3d-world/.
+
+## Rust rewrite (in progress)
+
+A port to Rust + Bevy is under way in a Cargo workspace. `index.html` stays as the reference implementation until the Rust version reaches parity. The owner is learning Rust, so Rust code is written with explanatory comments aimed at a learner. Keep that style.
+
+- `crates/sim`: engine-independent simulation with no dependencies (terrain so far; deer and birds next). Built and tested natively.
+- `crates/app` (planned): Bevy frontend, built for the browser with Trunk.
+- `tools/dump_terrain_reference.mjs`: runs the original WASM from `index.html` under Node and writes `crates/sim/tests/fixtures/terrain_reference.txt`. `crates/sim/tests/terrain_parity.rs` checks the Rust port against it. The output currently matches bit for bit, because the port widens to `f64` for `sin`/`cos`/`exp` the same way the JS `Math` imports do.
+
+Commands:
+- `cargo test` (single test: `cargo test -p sim --test terrain_parity height_matches`)
+- `cargo fmt && cargo clippy --all-targets -- -D warnings`
+- `node tools/dump_terrain_reference.mjs` regenerates the parity fixture
+
+## Running
+
+Open `index.html` in a browser, or serve the directory statically (e.g. `python3 -m http.server`) and visit `http://localhost:8000/`. All dependencies load from CDNs, so you need network access:
+- Tailwind CSS Play CDN (`cdn.tailwindcss.com`), with a small inline `tailwind.config`
+- Three.js **r128** (global `THREE`, not ES modules) plus `OrbitControls` from `three@0.128.0/examples/js`. The README says v0.160.0, but the code uses r128. Use only r128-compatible APIs.
+- FontAwesome 6.4.0 and Google Fonts
+
+To verify a change, load the page and check the browser console. A malformed WASM byte stream fails at `WebAssembly.compile` with a validation error.
+
+## Architecture (`index.html`)
+
+The `<script>` block is split into commented `PART` sections. Startup runs on `window.load`: `initWasmEngine()` → `initSharedMaterials()` → `initThree()` → `setupEventListeners()` → `animate()`.
+
+### Part 1: hand-written WASM assembler
+- Helpers `uleb128`, `sleb128`, `f32Bytes`, `encodeString`, and `createSection` encode the binary format. Opcode constants (`OP_*`, `TYPE_*`) are local to `initWasmEngine`.
+- The module imports `env.memory` (a 2-page / 128 KB `WebAssembly.Memory`, initial = max = 2) and `env.sin`, `env.cos`, and `env.exp` (function indices 0–2).
+- Four defined functions (indices 3–6) are exported: `terrainHeight(x,z)->f32`, `computeNormal(x,z)` (writes `f32[4..6]`), `stepDeerKinematics(count,dt,time)`, and `stepBirdFlock(count,dt,time)`. Their bodies are the arrays `func3Body`…`func6Body`. Each starts with its local declarations, and the comments name each local index.
+- **When editing WASM bodies:** keep the type, function, export, and code sections consistent (counts, type indices, function indices). Encode immediates correctly (`f32Bytes` for f32 constants; LEB128 for i32 constants and memarg offsets). Balance every `block`/`loop`/`if` with `OP_END`, plus the final function `OP_END`. Section and body lengths are computed automatically.
+
+### Shared linear memory contract
+JS reads and writes the same memory through `wasmF32` (a `Float32Array` view). The layout is documented in the big comment at the top of Part 1. It must stay in sync among the WASM byte offsets (byte = f32 index × 4), the JS constants, and every `wasmF32[b + N]` access:
+- `f32[0..8]`: globals (heightScale, seedOffset, waterLevel, worldSize, normal scratch output, herd center)
+- Deer: `DEER_BASE_F32 = 64`, stride 24 floats, max 64 deer
+- Birds: `BIRD_BASE_F32 = 1600`, stride 16 floats, max 64 birds
+
+Each creature's `userData.f32Base` is its slot's starting index. Field meanings come from the per-stride offsets (e.g. deer `+8` = state, `+15..+22` = leg joint angles).
+
+### Parts 2–3: scene and per-frame loop
+- Scene setup, terrain built from WASM heights and normals, water, flora, rocks, crystals, and the articulated deer and bird rigs, made of nested `THREE.Group` pivots stored in `userData.joints`.
+- `stepSimulationWasmAndSync(delta, t)` splits the work between JS and WASM:
+  1. JS runs the high-level AI (state machine and timers, steering targets, bird banking) by writing into WASM memory.
+  2. JS calls the WASM kinematics kernels.
+  3. JS copies joint angles and positions from memory onto the Three.js scene graph.
+- `animate()` also animates the water vertices in JS, refreshes the memory-inspector table about every 120 ms, and updates the follow camera.
+
+### UI
+A Tailwind HUD overlay has a control sidebar, a creature telemetry card, and a WASM inspector drawer (exports, live memory table, hex dump of `wasmBinaryBytes`). Controls are wired by element ID in `setupEventListeners()`.
