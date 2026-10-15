@@ -8,9 +8,11 @@
 //! ordinary functions whose parameters say what data they need (`Query`, `Res`, ...).
 //! Bevy calls them for you, every frame (`Update`) or once at launch (`Startup`).
 
+mod birds;
 mod camera;
 mod deer;
 mod environment;
+mod rig;
 mod terrain;
 mod water;
 
@@ -35,6 +37,7 @@ fn main() {
             environment::EnvironmentPlugin,
             camera::OrbitCameraPlugin,
             deer::DeerPlugin,
+            birds::BirdPlugin,
         ))
         .run();
 }

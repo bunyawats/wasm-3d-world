@@ -13,7 +13,10 @@ use std::f32::consts::PI;
 use bevy::prelude::*;
 use sim::{DeerKind, Herd, Pose};
 
-use crate::terrain::IslandTerrain;
+use crate::{
+    rig::{Rig, at},
+    terrain::IslandTerrain,
+};
 
 /// Seed for the herd's placement. Change it to get a different herd.
 const HERD_SEED: u64 = 2024;
@@ -231,7 +234,7 @@ fn spawn_rig(
         ))
         .id();
 
-    // `Rig` is a tiny helper (defined below) that spawns children of a given
+    // `Rig` (in `rig.rs`) is a tiny helper that spawns children of a given
     // parent, so each body part is one readable line.
     let mut rig = Rig { commands };
 
@@ -443,46 +446,6 @@ fn spawn_antler(rig: &mut Rig, assets: &DeerAssets, head: Entity, side: f32) {
             mat,
             Transform::from_translation(position).with_rotation(rotation),
         );
-    }
-}
-
-/// Shorthand for a translation-only transform.
-fn at(x: f32, y: f32, z: f32) -> Transform {
-    Transform::from_xyz(x, y, z)
-}
-
-/// Helper for spawning a rig's child entities.
-///
-/// It holds `&mut Commands` for a while, which needs a *lifetime parameter*: `'a`
-/// is the borrow of the `Commands` value, and `'w, 's` are the lifetimes `Commands`
-/// itself carries (the world and system-state borrows). Most of the time Rust infers
-/// lifetimes for you; structs holding references are where you have to name them.
-struct Rig<'a, 'w, 's> {
-    commands: &'a mut Commands<'w, 's>,
-}
-
-impl Rig<'_, '_, '_> {
-    /// An invisible joint that other parts hang from.
-    fn pivot(&mut self, parent: Entity, transform: Transform) -> Entity {
-        self.commands
-            .spawn((transform, Visibility::default(), ChildOf(parent)))
-            .id()
-    }
-
-    /// A visible mesh attached to `parent`.
-    fn part(
-        &mut self,
-        parent: Entity,
-        mesh: &Handle<Mesh>,
-        material: &Handle<StandardMaterial>,
-        transform: Transform,
-    ) {
-        self.commands.spawn((
-            Mesh3d(mesh.clone()),
-            MeshMaterial3d(material.clone()),
-            transform,
-            ChildOf(parent),
-        ));
     }
 }
 
