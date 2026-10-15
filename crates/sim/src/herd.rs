@@ -86,7 +86,7 @@ impl Herd {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Behaviour;
+    use crate::{Behaviour, Scenery, scenery::DEFAULT_TREE_COUNT};
 
     const FRAME: f32 = 1.0 / 60.0;
 
@@ -127,6 +127,8 @@ mod tests {
 
         for seed in 0..5 {
             let mut herd = Herd::initial(&terrain, seed);
+            // With the real trees and rocks to walk around.
+            herd.obstacles = Scenery::generate(&terrain, DEFAULT_TREE_COUNT, seed).obstacles();
             for frame in 0..(10 * 60 * 60) {
                 if frame % (30 * 60) == 0 {
                     herd.startle();

@@ -8,16 +8,20 @@
 
 pub mod bird;
 pub mod brain;
+pub mod daylight;
 pub mod deer;
 pub mod herd;
 pub mod rng;
+pub mod scenery;
 pub mod terrain;
 
 // Re-export the main types at the crate root, so callers can write
 // `sim::Terrain` instead of `sim::terrain::Terrain`.
 pub use bird::{Bird, Flight, Flocks, MAX_BIRDS};
 pub use brain::{Obstacle, TROT_SPEED, WALK_SPEED};
+pub use daylight::{Clock, Daylight, Phase};
 pub use deer::{Behaviour, Deer, DeerKind, Leg, Legs, Pose};
 pub use herd::Herd;
 pub use rng::Rng;
+pub use scenery::{Scenery, TreeKind};
 pub use terrain::{Surface, Terrain};

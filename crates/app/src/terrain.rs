@@ -5,23 +5,31 @@ use bevy::{
     mesh::{Indices, PrimitiveTopology},
     prelude::*,
 };
-use sim::{Surface, Terrain};
+use sim::{Scenery, Surface, Terrain, scenery::DEFAULT_TREE_COUNT};
 
 /// Grid resolution: the island is `TERRAIN_SEGMENTS` x `TERRAIN_SEGMENTS` quads.
 /// Same as `config.terrainSegments` in the original.
 const TERRAIN_SEGMENTS: u32 = 96;
+/// Seed for where trees, rocks, grass, crystals and clouds go.
+const SCENERY_SEED: u64 = 31;
 
 pub struct TerrainPlugin;
 
 impl Plugin for TerrainPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<IslandTerrain>()
+        // Generated here, in `build`, rather than in a `Startup` system: other
+        // plugins' startup systems need both (deer read the obstacles), and Bevy
+        // doesn't promise any order between startup systems of different plugins.
+        let terrain = Terrain::default();
+        let scenery = Scenery::generate(&terrain, DEFAULT_TREE_COUNT, SCENERY_SEED);
+        app.insert_resource(IslandTerrain(terrain))
+            .insert_resource(IslandScenery(scenery))
             .add_systems(Startup, spawn_terrain);
     }
 }
 
 /// The island's terrain parameters, shared by every system that needs them
-/// (the water reads `water_level`; later, deer will read heights).
+/// (the water reads `water_level`, and deer and birds read heights).
 ///
 /// Why not put `#[derive(Resource)]` on `sim::Terrain` directly? Rust's *orphan rule*:
 /// you may implement a trait for a type only if your crate owns the trait or the type.
@@ -30,6 +38,10 @@ impl Plugin for TerrainPlugin {
 /// and it also keeps `sim` free of any Bevy dependency.
 #[derive(Resource, Default)]
 pub struct IslandTerrain(pub Terrain);
+
+/// Placement of the island's trees, rocks, grass, crystals and clouds.
+#[derive(Resource)]
+pub struct IslandScenery(pub Scenery);
 
 /// `Commands` queues entity spawns; `ResMut<Assets<Mesh>>` is mutable access to the
 /// mesh storage. `Res<IslandTerrain>` is read-only access to our resource.

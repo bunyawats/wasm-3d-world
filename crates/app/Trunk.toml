@@ -1,0 +1,6 @@
+# Trunk settings for `trunk serve` / `trunk build`, run from this directory.
+
+[watch]
+# By default Trunk only watches this crate. The app also compiles the `sim` crate,
+# so watch it too, or edits there won't trigger a browser rebuild.
+watch = ["src", "index.html", "Cargo.toml", "../sim/src", "../sim/Cargo.toml"]

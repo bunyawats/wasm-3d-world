@@ -15,7 +15,7 @@ use sim::{DeerKind, Herd, Pose};
 
 use crate::{
     rig::{Rig, at},
-    terrain::IslandTerrain,
+    terrain::{IslandScenery, IslandTerrain},
 };
 
 /// Seed for the herd's placement. Change it to get a different herd.
@@ -203,9 +203,11 @@ fn spawn_herd(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     island: Res<IslandTerrain>,
+    scenery: Res<IslandScenery>,
 ) {
     let assets = DeerAssets::new(&mut meshes, &mut materials);
     let mut herd = Herd::initial(&island.0, HERD_SEED);
+    herd.obstacles = scenery.0.obstacles();
 
     for id in 0..herd.deer.len() {
         let kind = herd.deer[id].kind;

@@ -13,6 +13,7 @@ mod camera;
 mod deer;
 mod environment;
 mod rig;
+mod scenery;
 mod terrain;
 mod water;
 
@@ -33,6 +34,7 @@ fn main() {
         }))
         .add_plugins((
             terrain::TerrainPlugin,
+            scenery::SceneryPlugin,
             water::WaterPlugin,
             environment::EnvironmentPlugin,
             camera::OrbitCameraPlugin,
