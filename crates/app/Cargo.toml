@@ -6,6 +6,45 @@ license.workspace = true
 
 [dependencies]
 sim = { path = "../sim" }
-bevy = "0.20"
-# Immediate-mode GUI (egui) inside Bevy, for the HUD.
-bevy_egui = "0.43"
+
+# Bevy's default features include audio, gamepads, 2D, its own UI, glTF and scene
+# loading, text and more, none of which this app uses. Every feature adds code to
+# the download, so list only what's needed. (If a build fails with a missing type,
+# the feature that provides it is usually named after its crate, e.g. `bevy_pbr`.)
+[dependencies.bevy]
+version = "0.20"
+default-features = false
+features = [
+    # App basics: assets, logging, the task executor.
+    "std",
+    "default_app",
+    "multi_threaded",
+    # Windowing: winit, rendering into the browser's WebGL2, and X11 for native Linux.
+    "bevy_winit",
+    "webgl2",
+    "x11",
+    # Rendering: cameras, meshes, materials, PBR lighting and shadows, fog, tonemapping.
+    "bevy_camera",
+    "bevy_color",
+    "bevy_image",
+    "bevy_mesh",
+    "bevy_shader",
+    "bevy_material",
+    "bevy_window",
+    "bevy_render",
+    "bevy_core_pipeline",
+    "bevy_light",
+    "bevy_pbr",
+    "bevy_anti_alias",
+    "bevy_post_process",
+    # Clicking on creatures.
+    "bevy_picking",
+    "mesh_picking",
+]
+
+# Immediate-mode GUI (egui) inside Bevy, for the HUD. Its defaults add clipboard
+# and URL-opening support and Bevy UI integration, which the HUD doesn't use.
+[dependencies.bevy_egui]
+version = "0.43"
+default-features = false
+features = ["render", "picking", "default_fonts"]

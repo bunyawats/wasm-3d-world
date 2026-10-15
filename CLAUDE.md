@@ -27,6 +27,8 @@ Commands:
 - Clicking a creature: `MeshPickingSettings { require_markers: true }`, with `MeshPickingCamera` on the camera and `Pickable` on rig meshes (`Rig { pickable: true }`). Clicks bubble up to an observer on each rig root.
 - Keys in the app: S startles the herd, B adds a bird flock, T starts or stops the day/night clock, and `[` / `]` step the hour back or forward. The same actions are on the HUD.
 - Browser checks: Bevy only steps while the tab is visible. If `document.visibilityState` is `hidden` (for example, the automation window is behind other windows), `requestAnimationFrame` never fires and the scene looks frozen even though nothing is wrong.
+- `cd crates/app && trunk build --release --cargo-profile wasm-release` makes the optimised browser build. The `wasm-release` profile in the root `Cargo.toml` uses size-optimised fat LTO, and `data-wasm-opt` in `crates/app/index.html` runs Binaryen on top. The final link takes several minutes and about 5 GB of RAM.
+- Deployment: `.github/workflows/deploy.yml` runs on push to `main`. It runs fmt, the sim tests and clippy (the app is linted for the wasm target only, to avoid Linux window-system libraries), then deploys the original `index.html` at the Pages root and the Rust build at `/rust/`. The repo's Pages source must be set to "GitHub Actions"; it was "deploy from branch" before the port.
 - `cargo run -p app` runs the Bevy app natively
 - `cd crates/app && trunk serve --port 8080` builds to WASM and serves at http://127.0.0.1:8080 with live rebuild. The first build takes about 4 minutes; rebuilds take seconds. `crates/app/Trunk.toml` adds `../sim` to the watch list; without it, edits to `sim` don't trigger a rebuild, and Trunk needs a restart to pick up config changes.
 

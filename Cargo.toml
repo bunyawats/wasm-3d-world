@@ -18,3 +18,12 @@ opt-level = 1
 
 [profile.dev.package."*"]
 opt-level = 3
+
+# Release build for the browser: `trunk build --release` (see crates/app/index.html,
+# which selects this profile). Optimised for download size rather than raw speed.
+[profile.wasm-release]
+inherits = "release"
+opt-level = "s"      # Optimise for size; usually within a few % of "3" for speed.
+lto = "fat"          # Link-time optimisation across all crates: removes unused code.
+codegen-units = 1    # Slower to compile, but lets LTO see everything at once.
+strip = "debuginfo"  # Debug info is most of a dev build's 142 MB.

@@ -1,0 +1,88 @@
+# Builds the site and deploys it to GitHub Pages on every push to main.
+#
+#   https://bunyawats.github.io/wasm-3d-world/        the original JavaScript version
+#   https://bunyawats.github.io/wasm-3d-world/rust/   the Rust + Bevy version
+#
+# One-time setup: Settings → Pages → Build and deployment → Source: "GitHub Actions".
+
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: # Also allow running it by hand from the Actions tab.
+
+# Least privilege: read the code, write to Pages, and prove identity to Pages.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never run two deployments at once, but let an in-progress one finish.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  # Where the Rust app is served, relative to the site root.
+  RUST_APP_PATH: rust
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+          components: clippy, rustfmt
+
+      # Caches compiled dependencies between runs; Bevy takes a while to build.
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: trunk@0.21.14
+
+      - name: Check formatting
+        run: cargo fmt --all --check
+
+      # The simulation is plain Rust, so its tests (including the bit-for-bit parity
+      # tests against the original WASM) run natively.
+      - name: Test the simulation
+        run: cargo test -p sim
+
+      # Lint the app for the browser target it ships on. Checking it natively would
+      # need Linux window-system libraries this job doesn't install.
+      - name: Lint
+        run: |
+          cargo clippy -p sim --all-targets -- -D warnings
+          cargo clippy -p app --target wasm32-unknown-unknown -- -D warnings
+
+      - name: Build the Rust app
+        working-directory: crates/app
+        run: >
+          trunk build --release --cargo-profile wasm-release
+          --public-url "/${{ github.event.repository.name }}/${RUST_APP_PATH}/"
+          --dist "../../site/${RUST_APP_PATH}"
+
+      - name: Add the original JavaScript version
+        run: cp index.html site/index.html
+
+      - uses: actions/configure-pages@v6
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

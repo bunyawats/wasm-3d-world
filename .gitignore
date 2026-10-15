@@ -1,3 +1,4 @@
 /target
 .idea/
 crates/app/dist/
+/site
