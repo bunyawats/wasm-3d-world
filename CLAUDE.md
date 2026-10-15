@@ -10,16 +10,17 @@ An interactive low-poly 3D island with deer and bird wildlife, rendered with Thr
 
 A port to Rust + Bevy is under way in a Cargo workspace. `index.html` stays as the reference implementation until the Rust version reaches parity. The owner is learning Rust, so Rust code is written with explanatory comments aimed at a learner. Keep that style.
 
-- `crates/sim`: engine-independent simulation with no dependencies (terrain so far; deer and birds next). Built and tested natively.
+- `crates/sim`: engine-independent simulation, built and tested natively. Its only dependency is `glam`, kept at the version Bevy uses, so `Vec3` is shared with the app. It covers terrain, deer (kinematics plus pose), the herd, and a seeded `Rng` that replaces `Math.random()`. Parity-ported kernels mirror the original's floating-point operation order and do trig in `f64` (like JS `Math`) to stay bit-identical. Don't "simplify" those expressions or swap in `std` constants such as `PI`.
 - `crates/app`: Bevy 0.20 frontend. Each module is one plugin (`terrain`, `water`, `environment`, `camera`) registered in `main.rs`. `IslandTerrain` is a newtype `Resource` wrapping `sim::Terrain`. It's built for the browser with Trunk from `crates/app/index.html`, which is separate from the original root `index.html`.
 - Bevy's API changes between releases, so check names against the source in `~/.cargo/registry/src/*/bevy_*-0.20.0/` (examples in `bevy-0.20.0/examples/`) instead of relying on memory.
 - The orbit camera computes drag from `Window::cursor_position()` deltas, because `AccumulatedMouseMotion` didn't deliver drags in the browser. Synthetic JS `PointerEvent`s don't reach winit at all, so test input with real (trusted) browser events.
-- `tools/dump_terrain_reference.mjs`: runs the original WASM from `index.html` under Node and writes `crates/sim/tests/fixtures/terrain_reference.txt`. `crates/sim/tests/terrain_parity.rs` checks the Rust port against it. The output currently matches bit for bit, because the port widens to `f64` for `sin`/`cos`/`exp` the same way the JS `Math` imports do.
+- `tools/dump_*_reference.mjs` run the original WASM kernels from `index.html` under Node (shared loader: `tools/load_original_wasm.mjs`) and write fixtures to `crates/sim/tests/fixtures/`. The `crates/sim/tests/*_parity.rs` tests check the Rust ports against them. Terrain and deer kinematics currently match bit for bit.
+- In `crates/app/src/deer.rs`, each deer is an entity tree: a root with `DeerId` and a `DeerRig` that holds its joint `Entity`s, joined by `ChildOf`. Each frame, `sync_rigs` copies `sim::Herd` state onto the joints. `temporary_demo_gaits` is a placeholder until the milestone 4 behaviour brain replaces it.
 
 Commands:
 - `cargo test` (single test: `cargo test -p sim --test terrain_parity height_matches`)
 - `cargo fmt && cargo clippy --all-targets -- -D warnings`
-- `node tools/dump_terrain_reference.mjs` regenerates the parity fixture
+- `node tools/dump_terrain_reference.mjs` / `node tools/dump_deer_reference.mjs` regenerate the parity fixtures
 - `cargo run -p app` runs the Bevy app natively
 - `cd crates/app && trunk serve --port 8080` builds to WASM and serves at http://127.0.0.1:8080 with live rebuild. The first build takes about 4 minutes; rebuilds take seconds.
 

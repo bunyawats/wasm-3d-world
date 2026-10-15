@@ -10,7 +10,7 @@ use bevy::{
     window::PrimaryWindow,
 };
 
-use crate::environment::FOG_COLOR;
+use crate::{environment::FOG_COLOR, terrain::IslandTerrain};
 
 const ROTATE_SPEED: f32 = 0.005; // radians per pixel dragged
 const PAN_SPEED: f32 = 0.0015; // world units per pixel, per unit of distance
@@ -23,6 +23,10 @@ const MIN_PITCH: f32 = 0.02;
 const MAX_PITCH: f32 = FRAC_PI_2 - 0.05;
 /// How quickly the camera catches up with the input (higher = snappier).
 const SMOOTHING_RATE: f32 = 12.0;
+/// Never let the camera dip closer than this to the ground (metres).
+const GROUND_CLEARANCE: f32 = 0.6;
+/// How far above the ground the orbit centre stays (metres).
+const TARGET_HEIGHT: f32 = 1.0;
 
 pub struct OrbitCameraPlugin;
 
@@ -84,9 +88,12 @@ struct OrbitCamera {
     goal: Orbit,
 }
 
-fn spawn_camera(mut commands: Commands) {
-    // Same starting view as the original: eye at (55, 32, 70), looking at (0, 4, 0).
-    let orbit = Orbit::looking_from(Vec3::new(55.0, 32.0, 70.0), Vec3::new(0.0, 4.0, 0.0));
+fn spawn_camera(mut commands: Commands, island: Res<IslandTerrain>) {
+    // Same starting eye as the original, (55, 32, 70). The original looked at
+    // (0, 4, 0), but the meadow there is about 7 m high, which put the orbit
+    // centre inside the hill. Aim just above the ground instead.
+    let target = Vec3::new(0.0, island.0.height(0.0, 0.0) + TARGET_HEIGHT, 0.0);
+    let orbit = Orbit::looking_from(Vec3::new(55.0, 32.0, 70.0), target);
 
     commands.spawn((
         Name::new("Camera"),
@@ -115,6 +122,7 @@ fn spawn_camera(mut commands: Commands) {
 /// Turns mouse input into changes to the camera's goal orbit.
 fn orbit_input(
     camera: Single<(&mut OrbitCamera, &Transform)>,
+    island: Res<IslandTerrain>,
     buttons: Res<ButtonInput<MouseButton>>,
     scroll: Res<AccumulatedMouseScroll>,
     window: Single<&Window, With<PrimaryWindow>>,
@@ -146,6 +154,12 @@ fn orbit_input(
         // cursor. The further away the camera, the bigger each pixel's worth.
         let scale = goal.distance * PAN_SPEED;
         goal.target += (transform.left() * drag.x + transform.up() * drag.y) * scale;
+        // Don't let panning drag the orbit centre underground.
+        let ground = island
+            .0
+            .height(goal.target.x, goal.target.z)
+            .max(island.0.water_level);
+        goal.target.y = goal.target.y.max(ground + TARGET_HEIGHT);
     }
 
     // Trackpads report scrolling in pixels and mouse wheels in lines; normalise to lines.
@@ -161,7 +175,11 @@ fn orbit_input(
 }
 
 /// Eases the camera towards its goal and writes the result into its `Transform`.
-fn apply_orbit(camera: Single<(&mut OrbitCamera, &mut Transform)>, time: Res<Time>) {
+fn apply_orbit(
+    camera: Single<(&mut OrbitCamera, &mut Transform)>,
+    island: Res<IslandTerrain>,
+    time: Res<Time>,
+) {
     let (mut orbit_camera, mut transform) = camera.into_inner();
     // Frame-rate independent smoothing: the same fraction of the gap closes per
     // second whether the game runs at 30 or 144 FPS.
@@ -172,5 +190,10 @@ fn apply_orbit(camera: Single<(&mut OrbitCamera, &mut Transform)>, time: Res<Tim
     orbit_camera.current.approach(&goal, t);
 
     let current = orbit_camera.current;
-    *transform = Transform::from_translation(current.eye()).looking_at(current.target, Vec3::Y);
+    // Close in, an orbit can swing the camera into a hillside. Lift it back out.
+    // (The original's OrbitControls had no such check.)
+    let mut eye = current.eye();
+    let floor = island.0.height(eye.x, eye.z).max(island.0.water_level) + GROUND_CLEARANCE;
+    eye.y = eye.y.max(floor);
+    *transform = Transform::from_translation(eye).looking_at(current.target, Vec3::Y);
 }

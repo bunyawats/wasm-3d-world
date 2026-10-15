@@ -5,6 +5,8 @@
 //! are ordinary struct fields, and the normal is returned instead of being written
 //! into a scratch slot.
 
+use glam::Vec3;
+
 /// Parameters of the island. One value of this type fully describes a terrain.
 ///
 /// `#[derive(...)]` asks the compiler to generate trait implementations:
@@ -86,17 +88,19 @@ impl Terrain {
         h
     }
 
-    /// Unit-length surface normal at `(x, z)`, as `[x, y, z]`.
+    /// Unit-length surface normal at `(x, z)`.
     ///
     /// It's estimated by sampling the height on either side (central differences),
     /// the same way the original kernel did.
-    pub fn normal(&self, x: f32, z: f32) -> [f32; 3] {
+    pub fn normal(&self, x: f32, z: f32) -> Vec3 {
         let d = NORMAL_SAMPLE_OFFSET;
         let nx = self.height(x - d, z) - self.height(x + d, z);
         let ny = NORMAL_UP_BIAS;
         let nz = self.height(x, z - d) - self.height(x, z + d);
+        // Normalise by hand rather than with `Vec3::normalize()`: dividing each
+        // component by the length, in this order, matches the original bit for bit.
         let len = (nx * nx + ny * ny + nz * nz).sqrt();
-        [nx / len, ny / len, nz / len]
+        Vec3::new(nx / len, ny / len, nz / len)
     }
 
     /// What the ground is made of at `(x, z)`. The renderer turns this into a colour.
@@ -104,7 +108,7 @@ impl Terrain {
     /// Port of the colour rules in `generateTerrainWasm()` in `index.html`.
     pub fn surface(&self, x: f32, z: f32) -> Surface {
         let y = self.height(x, z);
-        let slope = 1.0 - self.normal(x, z)[1];
+        let slope = 1.0 - self.normal(x, z).y;
 
         // A chain of `if`/`else if` that *evaluates to* a `Surface`. Every branch
         // must produce a value of the same type, and the compiler checks that.
@@ -211,10 +215,10 @@ mod tests {
         for i in -8..=8 {
             // `as f32` converts the integer loop counter to a float.
             let x = i as f32 * 10.0;
-            let [nx, ny, nz] = terrain.normal(x, x * 0.5); // Destructure the array.
-            let len = (nx * nx + ny * ny + nz * nz).sqrt();
+            let normal = terrain.normal(x, x * 0.5);
+            let len = normal.length();
             assert!((len - 1.0).abs() < 1e-5, "normal at x={x} has length {len}");
-            assert!(ny > 0.0, "normal at x={x} points downward");
+            assert!(normal.y > 0.0, "normal at x={x} points downward");
         }
     }
 

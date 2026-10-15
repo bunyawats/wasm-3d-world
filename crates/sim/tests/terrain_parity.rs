@@ -77,7 +77,7 @@ fn normal_matches_original_wasm() {
     for s in &parse_samples() {
         let got = s.terrain.normal(s.x, s.z);
         // `zip` walks the two arrays side by side.
-        for (axis, (g, want)) in got.iter().zip(s.normal).enumerate() {
+        for (axis, (g, want)) in got.to_array().iter().zip(s.normal).enumerate() {
             assert!(
                 (g - want).abs() <= NORMAL_TOLERANCE,
                 "normal({}, {}) axis {axis} with {:?}: got {g}, original WASM gave {want}",

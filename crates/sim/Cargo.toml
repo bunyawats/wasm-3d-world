@@ -5,6 +5,9 @@ edition.workspace = true
 version.workspace = true
 license.workspace = true
 
-# No dependencies on purpose: this crate is plain Rust, so it builds and tests
-# natively in seconds and knows nothing about rendering.
+# Deliberately tiny: this crate is plain Rust, so it builds and tests natively in
+# seconds and knows nothing about rendering.
 [dependencies]
+# Vector maths (`Vec2`, `Vec3`). It's the same crate Bevy uses internally, so with
+# a matching version our vectors *are* Bevy's vectors, with no conversion needed.
+glam = "0.33"

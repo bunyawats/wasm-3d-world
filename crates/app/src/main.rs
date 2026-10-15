@@ -9,6 +9,7 @@
 //! Bevy calls them for you, every frame (`Update`) or once at launch (`Startup`).
 
 mod camera;
+mod deer;
 mod environment;
 mod terrain;
 mod water;
@@ -33,6 +34,7 @@ fn main() {
             water::WaterPlugin,
             environment::EnvironmentPlugin,
             camera::OrbitCameraPlugin,
+            deer::DeerPlugin,
         ))
         .run();
 }
