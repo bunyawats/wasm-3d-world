@@ -1,0 +1,20 @@
+<!doctype html>
+<!-- Trunk's entry page: `trunk serve` (run from crates/app) compiles the crate to
+     WebAssembly, injects the loader script here, and serves it with live reload. -->
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>WASM 3D World (Rust + Bevy)</title>
+    <!-- Tells Trunk which Rust crate to build. -->
+    <link data-trunk rel="rust" data-bin="app">
+    <style>
+        html, body { margin: 0; height: 100%; background: #60a5fa; overflow: hidden; }
+        #bevy { display: block; width: 100%; height: 100%; outline: none; }
+    </style>
+</head>
+<body>
+    <!-- Right-drag pans the camera, so suppress the browser's context menu. -->
+    <canvas id="bevy" oncontextmenu="return false"></canvas>
+</body>
+</html>

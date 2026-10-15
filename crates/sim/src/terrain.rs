@@ -98,6 +98,60 @@ impl Terrain {
         let len = (nx * nx + ny * ny + nz * nz).sqrt();
         [nx / len, ny / len, nz / len]
     }
+
+    /// What the ground is made of at `(x, z)`. The renderer turns this into a colour.
+    ///
+    /// Port of the colour rules in `generateTerrainWasm()` in `index.html`.
+    pub fn surface(&self, x: f32, z: f32) -> Surface {
+        let y = self.height(x, z);
+        let slope = 1.0 - self.normal(x, z)[1];
+
+        // A chain of `if`/`else if` that *evaluates to* a `Surface`. Every branch
+        // must produce a value of the same type, and the compiler checks that.
+        if y < self.water_level + BEACH_HEIGHT_ABOVE_WATER {
+            Surface::Sand
+        } else if y < ROCK_LINE {
+            if slope > CLIFF_SLOPE {
+                Surface::Cliff
+            } else {
+                // Two shades of grass, mixed in large soft patches.
+                let blend = (sin(x * 0.15) * cos(z * 0.15) + 1.0) * 0.5;
+                Surface::Meadow { blend }
+            }
+        } else if y < SNOW_LINE {
+            Surface::Rock
+        } else {
+            Surface::Snow
+        }
+    }
+}
+
+/// How far above the sea the sandy beach reaches.
+const BEACH_HEIGHT_ABOVE_WATER: f32 = 0.45;
+/// Above this height, grass gives way to bare rock.
+const ROCK_LINE: f32 = 9.5;
+/// Above this height, peaks are snow-capped.
+const SNOW_LINE: f32 = 15.5;
+/// Slope (`1 - normal.y`) above which grassland shows as a mossy cliff instead.
+const CLIFF_SLOPE: f32 = 0.26;
+
+/// The kind of ground at a point on the island.
+///
+/// A Rust `enum` is a *sum type*: a value is exactly one of these variants, and a
+/// variant can carry its own data (`Meadow` carries how much of each grass shade to
+/// use). Code that inspects a `Surface` with `match` must handle every variant, so
+/// adding a new one later makes the compiler point at every place that needs updating.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Surface {
+    Sand,
+    /// Grass. `blend` runs from 0.0 (dark green) to 1.0 (light green).
+    Meadow {
+        blend: f32,
+    },
+    /// A grassy-height slope too steep for grass.
+    Cliff,
+    Rock,
+    Snow,
 }
 
 /// Hermite smoothstep on an already-clamped `t` in `0.0..=1.0`.
@@ -162,6 +216,15 @@ mod tests {
             assert!((len - 1.0).abs() < 1e-5, "normal at x={x} has length {len}");
             assert!(ny > 0.0, "normal at x={x} points downward");
         }
+    }
+
+    #[test]
+    fn surfaces_go_from_beach_to_meadow_to_ocean_floor() {
+        let terrain = Terrain::default();
+        // The central meadow is grass.
+        assert!(matches!(terrain.surface(0.0, 0.0), Surface::Meadow { .. }));
+        // The sea floor at the world corner is below water, so it's sand.
+        assert_eq!(terrain.surface(80.0, 80.0), Surface::Sand);
     }
 
     #[test]

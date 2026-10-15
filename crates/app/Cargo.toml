@@ -1,0 +1,9 @@
+[package]
+name = "app"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[dependencies]
+sim = { path = "../sim" }
+bevy = "0.20"

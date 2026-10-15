@@ -11,4 +11,4 @@ pub mod terrain;
 
 // Re-export the main type at the crate root, so callers can write
 // `sim::Terrain` instead of `sim::terrain::Terrain`.
-pub use terrain::Terrain;
+pub use terrain::{Surface, Terrain};

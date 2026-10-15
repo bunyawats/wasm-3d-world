@@ -2,7 +2,7 @@
 # a single `Cargo.lock` and `target/` directory.
 [workspace]
 resolver = "3"
-members = ["crates/sim"]
+members = ["crates/sim", "crates/app"]
 
 # Settings that member crates opt into with `edition.workspace = true` etc.,
 # so they're declared once instead of copied into every crate.
@@ -10,3 +10,11 @@ members = ["crates/sim"]
 edition = "2024"
 version = "0.1.0"
 license = "MIT"
+
+# Bevy is slow when built unoptimised. Lightly optimise our own code (fast rebuilds,
+# still debuggable) and fully optimise every dependency, which only builds once.
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3
