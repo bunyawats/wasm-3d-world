@@ -1,6 +1,6 @@
 # 🌍 WASM 3D Low-Poly World & Wildlife Simulation
 
-**[🚀 Live Demo: Launch the 3D World](https://bunyawats.github.io/-wasm-3d-world/)**
+**[🚀 Live Demo: Launch the 3D World](https://bunyawats.github.io/wasm-3d-world/)**
 
 An interactive, procedural 3D low-poly island ecosystem built with **Three.js** and powered by an in-browser compiled **WebAssembly (`WebAssembly.Module` & `WebAssembly.Instance`)** physics, terrain heightfield, and biomechanical kinematics engine.
 
