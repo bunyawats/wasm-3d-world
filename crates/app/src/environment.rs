@@ -1,5 +1,6 @@
-//! Day/night cycle: sun (or moon) light, ambient light, sky and fog colours, and
-//! the star field, all driven by `sim::Clock`.
+//! Lighting and the day/night cycle. The sun (or moon), ambient light, sky and fog
+//! colours and the star field are driven by `sim::Clock`; the hemisphere light is
+//! constant, as in the original.
 //!
 //! Keys: T starts or stops the clock; [ and ] move the time back or forward an hour.
 
@@ -10,10 +11,21 @@ use sim::{Clock, Daylight, Rng, daylight::DEFAULT_HOURS};
 pub const FOG_COLOR: Color = Color::srgb_u8(0x93, 0xc5, 0xfd);
 
 /// Converting the original's Three.js light intensities to Bevy's physical units.
-/// Midday sun (1.35) maps to bright daylight; midday ambient (0.52) to 350 cd/m²,
-/// values tuned by eye against the original.
+/// Midday sun (1.35) maps to bright daylight.
 const SUN_LUX_PER_UNIT: f32 = light_consts::lux::AMBIENT_DAYLIGHT / 1.35;
-const AMBIENT_PER_UNIT: f32 = 350.0 / 0.52;
+/// Ambient and hemisphere light must keep the same strength *relative to the sun*
+/// as in the original. Three.js r128 multiplies all three by π, so their ratio is
+/// simply 1.35 : 0.52 : 0.65. Bevy is physically based: a sun of E lux lights a
+/// matte surface by `albedo × E / π`, but ambient light of B cd/m² by `albedo × B`.
+/// So one unit of ambient is worth one unit of sun divided by π.
+const AMBIENT_PER_UNIT: f32 = SUN_LUX_PER_UNIT / std::f32::consts::PI;
+
+/// The original's `HemisphereLight(0x93c5fd, 0x3f4f29, 0.65)`: sky blue from above,
+/// olive green from below. Unlike the sun and ambient light, it never changes with
+/// the time of day.
+const HEMISPHERE_SKY: Color = Color::srgb_u8(0x93, 0xc5, 0xfd);
+const HEMISPHERE_GROUND: Color = Color::srgb_u8(0x3f, 0x4f, 0x29);
+const HEMISPHERE_INTENSITY: f32 = 0.65;
 
 const STAR_COUNT: usize = 600;
 const STAR_SPHERE_RADIUS: f32 = 240.0;
@@ -27,9 +39,14 @@ impl Plugin for EnvironmentPlugin {
             .insert_resource(ClearColor(hex(Daylight::at(DEFAULT_HOURS).sky_color)))
             .insert_resource(GlobalAmbientLight {
                 color: Color::srgb_u8(0xdb, 0xea, 0xfe),
-                brightness: 350.0,
+                // Replaced by `apply_daylight` from the first frame on.
+                brightness: 0.52 * AMBIENT_PER_UNIT,
                 ..default()
             })
+            // An observer runs whenever its event happens, here "a `Camera3d` was
+            // added to an entity". That works whichever plugin spawns the camera,
+            // and whenever it does so, with no system ordering needed.
+            .add_observer(add_hemisphere_light)
             .add_systems(Startup, (spawn_sun, spawn_stars))
             .add_systems(Update, (clock_keys, tick_clock, apply_daylight).chain());
     }
@@ -55,6 +72,35 @@ struct StarMaterial(Handle<StandardMaterial>);
 pub fn hex(rgb: u32) -> Color {
     // Shift each byte down to the bottom, then `as u8` keeps just the low 8 bits.
     Color::srgb_u8((rgb >> 16) as u8, (rgb >> 8) as u8, rgb as u8)
+}
+
+/// Gives each 3D camera the original's hemisphere light.
+///
+/// Bevy has no hemisphere light, but it has *environment map* lights: a cube map
+/// (six square images, one per direction) that says how much light arrives from
+/// every direction. A surface facing up gets the "top" image's colour, one facing
+/// down gets the "bottom", and normals in between blend between them. Fill the top
+/// with sky colour and the bottom with ground colour, and that's a hemisphere light.
+fn add_hemisphere_light(
+    add: On<Add<Camera3d>>,
+    mut commands: Commands,
+    mut images: ResMut<Assets<Image>>,
+) {
+    // Three.js mixes the two colours by `0.5 * normal.y + 0.5`, so a sideways
+    // surface gets an even half-and-half blend. Mix in linear space, where light adds.
+    let sky = LinearRgba::from(HEMISPHERE_SKY);
+    let ground = LinearRgba::from(HEMISPHERE_GROUND);
+    let horizon = sky.mix(&ground, 0.5);
+
+    let mut light = EnvironmentMapLight::hemispherical_gradient(&mut images, sky, horizon, ground);
+    // An environment map also lights shiny reflections (its "specular" map), but
+    // Three.js's hemisphere light only lights the diffuse, matte part. A black
+    // specular map keeps the reflections out.
+    light.specular_map = EnvironmentMapLight::solid_color(&mut images, Color::BLACK).specular_map;
+    // Same scale as the ambient light, since Bevy adds both to a surface the same way.
+    light.intensity = HEMISPHERE_INTENSITY * AMBIENT_PER_UNIT;
+
+    commands.entity(add.entity).insert(light);
 }
 
 fn spawn_sun(mut commands: Commands) {
