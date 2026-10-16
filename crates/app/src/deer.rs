@@ -15,6 +15,7 @@ use sim::{Deer, DeerKind, Herd, Pose};
 
 use crate::{
     camera::CameraFocus,
+    color::{IslandMaterial, material},
     rig::{Rig, at},
     terrain::{IslandScenery, IslandTerrain},
     ui::{SimTimings, Toast},
@@ -102,16 +103,16 @@ struct DeerAssets {
     leg_lower_back: Handle<Mesh>,
     hoof: Handle<Mesh>,
 
-    stag_coat: Handle<StandardMaterial>,
-    doe_coat: Handle<StandardMaterial>,
-    fawn_coat: Handle<StandardMaterial>,
-    belly_fur: Handle<StandardMaterial>,
-    dark: Handle<StandardMaterial>,
-    antler: Handle<StandardMaterial>,
+    stag_coat: Handle<IslandMaterial>,
+    doe_coat: Handle<IslandMaterial>,
+    fawn_coat: Handle<IslandMaterial>,
+    belly_fur: Handle<IslandMaterial>,
+    dark: Handle<IslandMaterial>,
+    antler: Handle<IslandMaterial>,
 }
 
 impl DeerAssets {
-    fn new(meshes: &mut Assets<Mesh>, materials: &mut Assets<StandardMaterial>) -> Self {
+    fn new(meshes: &mut Assets<Mesh>, materials: &mut Assets<IslandMaterial>) -> Self {
         // Small closures keep the shape list readable. Each one borrows `meshes`
         // mutably, so they're called one at a time below (Rust won't allow two
         // closures to hold a mutable borrow of `meshes` at once).
@@ -164,13 +165,13 @@ impl DeerAssets {
             cone(0.014, 0.22, 5),
         ];
 
-        let mut material = |hex: [u8; 3], roughness: f32, metallic: f32| {
-            materials.add(StandardMaterial {
-                base_color: Color::srgb_u8(hex[0], hex[1], hex[2]),
+        let mut matte = |hex: [u8; 3], roughness: f32, metallic: f32| {
+            materials.add(material(StandardMaterial {
+                base_color: crate::color::rgb(hex[0], hex[1], hex[2]),
                 perceptual_roughness: roughness,
                 metallic,
                 ..default()
-            })
+            }))
         };
 
         Self {
@@ -197,16 +198,16 @@ impl DeerAssets {
             leg_lower_front,
             leg_lower_back,
             hoof,
-            stag_coat: material([0x8c, 0x53, 0x27], 0.78, 0.05),
-            doe_coat: material([0xa6, 0x6a, 0x38], 0.75, 0.05),
-            fawn_coat: material([0xb8, 0x7a, 0x44], 0.75, 0.05),
-            belly_fur: material([0xe2, 0xce, 0xb5], 0.85, 0.0),
-            dark: material([0x1e, 0x1b, 0x18], 0.4, 0.1),
-            antler: material([0xdc, 0xd3, 0xc2], 0.6, 0.08),
+            stag_coat: matte([0x8c, 0x53, 0x27], 0.78, 0.05),
+            doe_coat: matte([0xa6, 0x6a, 0x38], 0.75, 0.05),
+            fawn_coat: matte([0xb8, 0x7a, 0x44], 0.75, 0.05),
+            belly_fur: matte([0xe2, 0xce, 0xb5], 0.85, 0.0),
+            dark: matte([0x1e, 0x1b, 0x18], 0.4, 0.1),
+            antler: matte([0xdc, 0xd3, 0xc2], 0.6, 0.08),
         }
     }
 
-    fn coat(&self, kind: DeerKind) -> Handle<StandardMaterial> {
+    fn coat(&self, kind: DeerKind) -> Handle<IslandMaterial> {
         match kind {
             DeerKind::Stag => self.stag_coat.clone(),
             DeerKind::Doe => self.doe_coat.clone(),
@@ -218,7 +219,7 @@ impl DeerAssets {
 fn spawn_herd(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut materials: ResMut<Assets<IslandMaterial>>,
     island: Res<IslandTerrain>,
     scenery: Res<IslandScenery>,
 ) {
@@ -433,7 +434,7 @@ fn spawn_rig(
 fn spawn_leg(
     rig: &mut Rig,
     assets: &DeerAssets,
-    coat: &Handle<StandardMaterial>,
+    coat: &Handle<IslandMaterial>,
     body: Entity,
     hip_at: Vec3,
     is_front: bool,

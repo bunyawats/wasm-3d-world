@@ -2,7 +2,10 @@
 
 use bevy::{mesh::VertexAttributeValues, prelude::*};
 
-use crate::terrain::IslandTerrain;
+use crate::{
+    color::{IslandMaterial, material},
+    terrain::IslandTerrain,
+};
 
 /// The sea extends far past the island, so its edge fades into the fog instead of
 /// showing as a hard line against the sky (the original used 2.2).
@@ -27,7 +30,7 @@ struct Water;
 fn spawn_water(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut materials: ResMut<Assets<IslandMaterial>>,
     island: Res<IslandTerrain>,
 ) {
     let size = island.0.world_size * WATER_SIZE_FACTOR;
@@ -40,16 +43,16 @@ fn spawn_water(
         Name::new("Water"),
         Water,
         Mesh3d(meshes.add(mesh)),
-        MeshMaterial3d(materials.add(StandardMaterial {
-            base_color: Color::srgba_u8(0x0e, 0x74, 0x90, 219), // 0.86 opacity
+        MeshMaterial3d(materials.add(material(StandardMaterial {
+            base_color: crate::color::rgb(0x0e, 0x74, 0x90).with_alpha(0.86),
             alpha_mode: AlphaMode::Blend,
             perceptual_roughness: 0.14,
-            // The original used metalness 0.75, but without an environment map a
-            // metal surface has nothing to reflect and renders almost black.
-            metallic: 0.1,
-            reflectance: 0.6,
+            // The original's values. A metal reflects its surroundings, and like the
+            // original there's nothing to reflect (the fill light's reflection map is
+            // black), so the sea is mostly dark until the fog lightens it with distance.
+            metallic: 0.75,
             ..default()
-        })),
+        }))),
         Transform::from_xyz(0.0, island.0.water_level, 0.0),
     ));
 }

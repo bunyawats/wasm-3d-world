@@ -14,7 +14,7 @@ use bevy::{
 };
 use bevy_egui::input::EguiWantsInput;
 
-use crate::{birds::FlockState, deer::HerdState, environment::FOG_COLOR, terrain::IslandTerrain};
+use crate::{birds::FlockState, deer::HerdState, terrain::IslandTerrain};
 
 const ROTATE_SPEED: f32 = 0.005; // radians per pixel dragged
 const PAN_SPEED: f32 = 0.0015; // world units per pixel, per unit of distance
@@ -128,10 +128,11 @@ fn spawn_camera(mut commands: Commands, island: Res<IslandTerrain>) {
             ..default()
         }),
         Tonemapping::AcesFitted,
-        // Exponential fog, like the original's `THREE.FogExp2(…, 0.0042)`.
+        // The original's `THREE.FogExp2(…, 0.0042)`. Bevy doesn't draw this fog
+        // itself: `r128_shading.wesl` reads the density and colour from it and
+        // applies the fog r128's way. The colour is set by `apply_daylight`.
         DistanceFog {
-            color: FOG_COLOR,
-            falloff: FogFalloff::Exponential { density: 0.0042 },
+            falloff: FogFalloff::ExponentialSquared { density: 0.0042 },
             ..default()
         },
         Transform::from_translation(orbit.eye()).looking_at(orbit.target, Vec3::Y),

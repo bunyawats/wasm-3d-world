@@ -10,8 +10,7 @@ use bevy::{
 };
 use sim::{Clock, Daylight, Rng, daylight::DEFAULT_HOURS};
 
-/// Daytime fog colour, used for the camera's fog until the first frame updates it.
-pub const FOG_COLOR: Color = Color::srgb_u8(0x93, 0xc5, 0xfd);
+use crate::color::{IslandMaterial, hex, material, rgb};
 
 /// Converting the original's Three.js light intensities to Bevy's physical units.
 /// Midday sun (1.35) maps to bright daylight.
@@ -27,13 +26,13 @@ const SUN_LUX_PER_UNIT: f32 = light_consts::lux::AMBIENT_DAYLIGHT / 1.35;
 pub const AMBIENT_PER_UNIT: f32 = SUN_LUX_PER_UNIT / std::f32::consts::PI;
 
 /// The original's `AmbientLight(0xdbeafe, …)`. Its strength comes from `sim::Daylight`.
-const AMBIENT_COLOR: Color = Color::srgb_u8(0xdb, 0xea, 0xfe);
+const AMBIENT_COLOR: Color = rgb(0xdb, 0xea, 0xfe);
 
 /// The original's `HemisphereLight(0x93c5fd, 0x3f4f29, 0.65)`: sky blue from above,
 /// olive green from below. Unlike the sun and ambient light, it never changes with
 /// the time of day.
-const HEMISPHERE_SKY: Color = Color::srgb_u8(0x93, 0xc5, 0xfd);
-const HEMISPHERE_GROUND: Color = Color::srgb_u8(0x3f, 0x4f, 0x29);
+const HEMISPHERE_SKY: Color = rgb(0x93, 0xc5, 0xfd);
+const HEMISPHERE_GROUND: Color = rgb(0x3f, 0x4f, 0x29);
 const HEMISPHERE_INTENSITY: f32 = 0.65;
 
 const STAR_COUNT: usize = 600;
@@ -79,13 +78,7 @@ struct StarField;
 
 /// The one material all stars share. Changing its alpha fades every star together.
 #[derive(Resource)]
-struct StarMaterial(Handle<StandardMaterial>);
-
-/// Converts a `0xRRGGBB` sRGB colour (the format `sim` uses) to a Bevy `Color`.
-pub fn hex(rgb: u32) -> Color {
-    // Shift each byte down to the bottom, then `as u8` keeps just the low 8 bits.
-    Color::srgb_u8((rgb >> 16) as u8, (rgb >> 8) as u8, rgb as u8)
-}
+struct StarMaterial(Handle<IslandMaterial>);
 
 /// The original's ambient and hemisphere light, combined into one Bevy light.
 ///
@@ -173,7 +166,7 @@ fn spawn_sun(mut commands: Commands) {
 fn spawn_stars(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut materials: ResMut<Assets<IslandMaterial>>,
 ) {
     let mesh = meshes.add(
         Sphere::new(0.6)
@@ -181,13 +174,13 @@ fn spawn_stars(
             .ico(0)
             .expect("ico(0) is always valid"),
     );
-    let material = materials.add(StandardMaterial {
+    let material = materials.add(material(StandardMaterial {
         base_color: Color::WHITE.with_alpha(0.0),
         alpha_mode: AlphaMode::Blend,
         unlit: true,        // Stars glow; scene lighting shouldn't shade them.
         fog_enabled: false, // At 240 m the fog would otherwise swallow them.
         ..default()
-    });
+    }));
     commands.insert_resource(StarMaterial(material.clone()));
 
     let field = commands
@@ -251,7 +244,7 @@ fn apply_daylight(
     mut fog: Query<&mut DistanceFog>,
     stars: Single<&mut Visibility, With<StarField>>,
     star_material: Res<StarMaterial>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut materials: ResMut<Assets<IslandMaterial>>,
 ) {
     // Only redo the work when the time actually changed (or on the first frame).
     // `is_changed` is Bevy's change detection: it's true when someone wrote to the
@@ -272,6 +265,7 @@ fn apply_daylight(
         }
     }
     for mut fog in &mut fog {
+        // Used as is: `r128_shading.wesl` mixes it in after tonemapping.
         fog.color = hex(light.fog_color);
     }
 
@@ -288,6 +282,7 @@ fn apply_daylight(
         Visibility::Hidden
     };
     if let Some(mut material) = materials.get_mut(&star_material.0) {
-        material.base_color.set_alpha(light.star_opacity);
+        // `base` is the `StandardMaterial` inside our `IslandMaterial`.
+        material.base.base_color.set_alpha(light.star_opacity);
     }
 }

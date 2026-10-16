@@ -11,6 +11,7 @@ use sim::Flocks;
 
 use crate::{
     camera::CameraFocus,
+    color::{IslandMaterial, material},
     rig::{Rig, at},
     terrain::IslandTerrain,
     ui::{SimTimings, Toast},
@@ -75,20 +76,20 @@ struct BirdAssets {
     outer_wing: Handle<Mesh>,
     primary_feather: Handle<Mesh>,
 
-    plumage: Handle<StandardMaterial>,
-    breast_feathers: Handle<StandardMaterial>,
-    wing_tip: Handle<StandardMaterial>,
-    beak_colour: Handle<StandardMaterial>,
+    plumage: Handle<IslandMaterial>,
+    breast_feathers: Handle<IslandMaterial>,
+    wing_tip: Handle<IslandMaterial>,
+    beak_colour: Handle<IslandMaterial>,
 }
 
 impl BirdAssets {
-    fn new(meshes: &mut Assets<Mesh>, materials: &mut Assets<StandardMaterial>) -> Self {
-        let mut material = |r: u8, g: u8, b: u8, roughness: f32| {
-            materials.add(StandardMaterial {
-                base_color: Color::srgb_u8(r, g, b),
+    fn new(meshes: &mut Assets<Mesh>, materials: &mut Assets<IslandMaterial>) -> Self {
+        let mut matte = |r: u8, g: u8, b: u8, roughness: f32| {
+            materials.add(material(StandardMaterial {
+                base_color: crate::color::rgb(r, g, b),
                 perceptual_roughness: roughness,
                 ..default()
-            })
+            }))
         };
         Self {
             body: meshes.add(Sphere::new(0.32).mesh().uv(12, 10)),
@@ -106,10 +107,10 @@ impl BirdAssets {
             inner_wing: meshes.add(Cuboid::new(INNER_WING_LENGTH, 0.045, 0.46)),
             outer_wing: meshes.add(Cuboid::new(OUTER_WING_LENGTH, 0.032, 0.38)),
             primary_feather: meshes.add(Cuboid::new(0.32, 0.02, 0.09)),
-            plumage: material(0x3b, 0x28, 0x1e, 0.65),
-            breast_feathers: material(0xd6, 0xcf, 0xc7, 0.75),
-            wing_tip: material(0x17, 0x14, 0x12, 0.6),
-            beak_colour: material(0xf5, 0x9e, 0x0b, 0.4),
+            plumage: matte(0x3b, 0x28, 0x1e, 0.65),
+            breast_feathers: matte(0xd6, 0xcf, 0xc7, 0.75),
+            wing_tip: matte(0x17, 0x14, 0x12, 0.6),
+            beak_colour: matte(0xf5, 0x9e, 0x0b, 0.4),
         }
     }
 }
@@ -117,7 +118,7 @@ impl BirdAssets {
 fn spawn_initial_flock(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut materials: ResMut<Assets<IslandMaterial>>,
 ) {
     commands.insert_resource(BirdAssets::new(&mut meshes, &mut materials));
     // Rigs are created by `spawn_missing_rigs` on the first frame, the same path

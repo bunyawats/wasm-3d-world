@@ -10,6 +10,7 @@
 
 mod birds;
 mod camera;
+mod color;
 mod deer;
 mod environment;
 mod rig;
@@ -34,6 +35,7 @@ fn main() {
             ..default()
         }))
         .add_plugins((
+            color::R128ColorPlugin,
             terrain::TerrainPlugin,
             scenery::SceneryPlugin,
             water::WaterPlugin,

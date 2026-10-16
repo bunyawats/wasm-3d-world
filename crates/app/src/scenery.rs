@@ -11,6 +11,7 @@ use sim::{
 };
 
 use crate::{
+    color::{self, IslandMaterial, material},
     deer::HerdState,
     environment::AMBIENT_PER_UNIT,
     rig::{Rig, at},
@@ -65,40 +66,40 @@ struct SceneryAssets {
     blade: Handle<Mesh>,
     crystal: Handle<Mesh>,
 
-    bark: Handle<StandardMaterial>,
+    bark: Handle<IslandMaterial>,
     /// Pine tiers alternate between two shades of green.
-    pine_needles: [Handle<StandardMaterial>; 2],
-    oak_leaves: Handle<StandardMaterial>,
-    stone: Handle<StandardMaterial>,
-    grass: Handle<StandardMaterial>,
+    pine_needles: [Handle<IslandMaterial>; 2],
+    oak_leaves: Handle<IslandMaterial>,
+    stone: Handle<IslandMaterial>,
+    grass: Handle<IslandMaterial>,
     /// Crystals scattered at startup are metallic; ones added with "+ Crystal" aren't.
-    crystal_glow: Handle<StandardMaterial>,
-    planted_crystal_glow: Handle<StandardMaterial>,
-    cloud: Handle<StandardMaterial>,
+    crystal_glow: Handle<IslandMaterial>,
+    planted_crystal_glow: Handle<IslandMaterial>,
+    cloud: Handle<IslandMaterial>,
 }
 
 impl SceneryAssets {
-    fn new(meshes: &mut Assets<Mesh>, materials: &mut Assets<StandardMaterial>) -> Self {
+    fn new(meshes: &mut Assets<Mesh>, materials: &mut Assets<IslandMaterial>) -> Self {
         // `map` on an array transforms each element and keeps the array's length,
         // so `[(f32, f32, f32); 4]` becomes `[Handle<Mesh>; 4]`.
         let pine_tiers = PINE_TIERS
             .map(|(radius, height, _)| meshes.add(Cone { radius, height }.mesh().resolution(8)));
 
-        let mut material = |rgb: [u8; 3], roughness: f32| {
-            materials.add(StandardMaterial {
-                base_color: Color::srgb_u8(rgb[0], rgb[1], rgb[2]),
+        let mut matte = |rgb: [u8; 3], roughness: f32| {
+            materials.add(material(StandardMaterial {
+                base_color: color::rgb(rgb[0], rgb[1], rgb[2]),
                 perceptual_roughness: roughness,
                 ..default()
-            })
+            }))
         };
-        let bark = material([0x4a, 0x35, 0x25], 0.92);
+        let bark = matte([0x4a, 0x35, 0x25], 0.92);
         let pine_needles = [
-            material([0x1e, 0x4d, 0x2b], 0.82),
-            material([0x26, 0x5c, 0x34], 0.82),
+            matte([0x1e, 0x4d, 0x2b], 0.82),
+            matte([0x26, 0x5c, 0x34], 0.82),
         ];
-        let oak_leaves = material([0x3b, 0x6e, 0x38], 0.8);
-        let stone = material([0x64, 0x74, 0x8b], 0.88);
-        let grass = material([0x4d, 0x8c, 0x45], 0.8);
+        let oak_leaves = matte([0x3b, 0x6e, 0x38], 0.8);
+        let stone = matte([0x64, 0x74, 0x8b], 0.88);
+        let grass = matte([0x4d, 0x8c, 0x45], 0.8);
 
         Self {
             trunk: meshes.add(
@@ -129,14 +130,14 @@ impl SceneryAssets {
             grass,
             // The original's two crystal materials, from `populateFloraAndRocks()`
             // and `spawnObject('crystal')`.
-            crystal_glow: materials.add(crystal_material(0.5, 0.85)),
-            planted_crystal_glow: materials.add(crystal_material(0.7, 0.0)),
-            cloud: materials.add(StandardMaterial {
+            crystal_glow: materials.add(material(crystal_material(0.5, 0.85))),
+            planted_crystal_glow: materials.add(material(crystal_material(0.7, 0.0))),
+            cloud: materials.add(material(StandardMaterial {
                 base_color: Color::WHITE.with_alpha(0.86),
                 alpha_mode: AlphaMode::Blend,
                 perceptual_roughness: 0.92,
                 ..default()
-            }),
+            })),
         }
     }
 }
@@ -163,13 +164,13 @@ fn ico_ball(radius: f32, faceted: bool) -> Mesh {
 /// `emissiveIntensity` and `metalness`.
 fn crystal_material(glow: f32, metallic: f32) -> StandardMaterial {
     StandardMaterial {
-        base_color: Color::srgb_u8(0x38, 0xbd, 0xf8),
+        base_color: color::rgb(0x38, 0xbd, 0xf8),
         // Emissive light is added on top of lighting, so crystals glow even at
         // night. By default Bevy adds it *after* the camera's exposure, as a fixed
         // screen brightness. Weight 1.0 runs it through the exposure like real
         // light, so it can use the same unit conversion as the ambient light and
         // keep the original's balance between glow and lighting.
-        emissive: LinearRgba::from(Color::srgb_u8(0x02, 0x84, 0xc7)) * (glow * AMBIENT_PER_UNIT),
+        emissive: LinearRgba::from(color::rgb(0x02, 0x84, 0xc7)) * (glow * AMBIENT_PER_UNIT),
         emissive_exposure_weight: 1.0,
         perceptual_roughness: 0.15,
         metallic,
@@ -202,7 +203,7 @@ fn octahedron(radius: f32) -> Mesh {
 fn spawn_scenery(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut materials: ResMut<Assets<IslandMaterial>>,
     scenery: Res<IslandScenery>,
 ) {
     let assets = SceneryAssets::new(&mut meshes, &mut materials);

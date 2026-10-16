@@ -7,6 +7,8 @@ use bevy::{
 };
 use sim::{Scenery, Surface, Terrain, scenery::DEFAULT_TREE_COUNT};
 
+use crate::color::{IslandMaterial, material, rgb};
+
 /// Grid resolution: the island is `TERRAIN_SEGMENTS` x `TERRAIN_SEGMENTS` quads.
 /// Same as `config.terrainSegments` in the original.
 const TERRAIN_SEGMENTS: u32 = 96;
@@ -71,7 +73,7 @@ pub struct IslandScenery(pub Scenery);
 fn spawn_terrain(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut materials: ResMut<Assets<IslandMaterial>>,
     island: Res<IslandTerrain>,
 ) {
     let mesh = build_terrain_mesh(&island.0, TERRAIN_SEGMENTS);
@@ -80,14 +82,14 @@ fn spawn_terrain(
         Name::new("Terrain"),
         TerrainMesh,
         Mesh3d(meshes.add(mesh)),
-        MeshMaterial3d(materials.add(StandardMaterial {
+        MeshMaterial3d(materials.add(material(StandardMaterial {
             // White, because the vertex colours carry the actual colour
             // (Bevy multiplies the two together).
             base_color: Color::WHITE,
             perceptual_roughness: 0.88,
             metallic: 0.04,
             ..default()
-        })),
+        }))),
     ));
 }
 
@@ -161,16 +163,16 @@ fn build_terrain_mesh(terrain: &Terrain, segments: u32) -> Mesh {
 /// `match` must cover every `Surface` variant. Delete an arm and the code won't compile.
 fn surface_color(surface: Surface) -> LinearRgba {
     let color = match surface {
-        Surface::Sand => Srgba::rgb_u8(0xd6, 0xc7, 0xa9),
-        Surface::Cliff => Srgba::rgb_u8(0x64, 0x74, 0x62),
+        Surface::Sand => rgb(0xd6, 0xc7, 0xa9),
+        Surface::Cliff => rgb(0x64, 0x74, 0x62),
         // `Meadow { blend }` *destructures* the variant, binding its field to `blend`.
-        Surface::Meadow { blend } => {
-            Srgba::rgb_u8(0x3b, 0x7a, 0x3e).mix(&Srgba::rgb_u8(0x52, 0x8c, 0x42), blend)
-        }
-        Surface::Rock => Srgba::rgb_u8(0x5c, 0x66, 0x58),
-        Surface::Snow => Srgba::rgb_u8(0xf1, 0xf5, 0xf9),
+        // `rgb` colours are linear, so this blends the raw numbers, as r128 did.
+        Surface::Meadow { blend } => rgb(0x3b, 0x7a, 0x3e).mix(&rgb(0x52, 0x8c, 0x42), blend),
+        Surface::Rock => rgb(0x5c, 0x66, 0x58),
+        Surface::Snow => rgb(0xf1, 0xf5, 0xf9),
     };
-    // Mesh vertex colours are stored in linear space, while hex codes are sRGB.
-    // `.into()` converts using the `From<Srgba> for LinearRgba` impl.
+    // Mesh vertex colours are stored as linear values. The GPU blends them evenly
+    // across each triangle, which (with raw colours) gives the original's soft fades.
+    // `.into()` converts using the `From<Color> for LinearRgba` impl.
     color.into()
 }

@@ -3,6 +3,8 @@
 
 use bevy::prelude::*;
 
+use crate::color::IslandMaterial;
+
 /// Shorthand for a translation-only transform.
 pub fn at(x: f32, y: f32, z: f32) -> Transform {
     Transform::from_xyz(x, y, z)
@@ -35,7 +37,7 @@ impl Rig<'_, '_, '_> {
         &mut self,
         parent: Entity,
         mesh: &Handle<Mesh>,
-        material: &Handle<StandardMaterial>,
+        material: &Handle<IslandMaterial>,
         transform: Transform,
     ) {
         let mut part = self.commands.spawn((
@@ -60,7 +62,7 @@ impl Rig<'_, '_, '_> {
         &mut self,
         parent: Entity,
         mesh: &Handle<Mesh>,
-        material: &Handle<StandardMaterial>,
+        material: &Handle<IslandMaterial>,
         transform: Transform,
         offset: Vec3,
     ) {
