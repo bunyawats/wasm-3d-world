@@ -7,11 +7,14 @@ use crate::{
     terrain::IslandTerrain,
 };
 
-/// The sea extends far past the island, so its edge fades into the fog instead of
-/// showing as a hard line against the sky (the original used 2.2).
-const WATER_SIZE_FACTOR: f32 = 6.0;
-/// Grid lines across the water plane (more = smoother waves, more work per frame).
-const WATER_SUBDIVISIONS: u32 = 120;
+/// The sea's width as a multiple of the island's, as in the original. Its far
+/// edge is the horizon you see against the sky. A bigger sea moves that edge
+/// farther out, where the fog has washed the water to the sky's pale blue.
+const WATER_SIZE_FACTOR: f32 = 2.2;
+/// Extra grid lines across the water plane (more = smoother waves, more work per
+/// frame). Bevy's `subdivisions(n)` makes n + 1 strips, so this is the original's
+/// 56 × 56 grid.
+const WATER_SUBDIVISIONS: u32 = 55;
 
 pub struct WaterPlugin;
 
