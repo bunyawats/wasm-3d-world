@@ -12,6 +12,7 @@ use sim::{
 
 use crate::{
     deer::HerdState,
+    environment::AMBIENT_PER_UNIT,
     rig::{Rig, at},
     terrain::{IslandEdit, IslandScenery, IslandTerrain, SCENERY_SEED, TreeCount},
 };
@@ -70,7 +71,9 @@ struct SceneryAssets {
     oak_leaves: Handle<StandardMaterial>,
     stone: Handle<StandardMaterial>,
     grass: Handle<StandardMaterial>,
+    /// Crystals scattered at startup are metallic; ones added with "+ Crystal" aren't.
     crystal_glow: Handle<StandardMaterial>,
+    planted_crystal_glow: Handle<StandardMaterial>,
     cloud: Handle<StandardMaterial>,
 }
 
@@ -124,15 +127,10 @@ impl SceneryAssets {
             oak_leaves,
             stone,
             grass,
-            crystal_glow: materials.add(StandardMaterial {
-                base_color: Color::srgb_u8(0x38, 0xbd, 0xf8),
-                // Emissive light is added on top of lighting, so crystals glow at
-                // night. The multiplier makes it visible at the camera's exposure.
-                emissive: LinearRgba::from(Color::srgb_u8(0x02, 0x84, 0xc7)) * 4.0,
-                perceptual_roughness: 0.15,
-                metallic: 0.5,
-                ..default()
-            }),
+            // The original's two crystal materials, from `populateFloraAndRocks()`
+            // and `spawnObject('crystal')`.
+            crystal_glow: materials.add(crystal_material(0.5, 0.85)),
+            planted_crystal_glow: materials.add(crystal_material(0.7, 0.0)),
             cloud: materials.add(StandardMaterial {
                 base_color: Color::WHITE.with_alpha(0.86),
                 alpha_mode: AlphaMode::Blend,
@@ -161,6 +159,24 @@ fn ico_ball(radius: f32, faceted: bool) -> Mesh {
 
 /// An eight-sided gem shape (two square pyramids base to base). Bevy has no
 /// octahedron primitive, so this builds the triangles by hand.
+/// A glowing blue crystal material. `glow` and `metallic` are the original's
+/// `emissiveIntensity` and `metalness`.
+fn crystal_material(glow: f32, metallic: f32) -> StandardMaterial {
+    StandardMaterial {
+        base_color: Color::srgb_u8(0x38, 0xbd, 0xf8),
+        // Emissive light is added on top of lighting, so crystals glow even at
+        // night. By default Bevy adds it *after* the camera's exposure, as a fixed
+        // screen brightness. Weight 1.0 runs it through the exposure like real
+        // light, so it can use the same unit conversion as the ambient light and
+        // keep the original's balance between glow and lighting.
+        emissive: LinearRgba::from(Color::srgb_u8(0x02, 0x84, 0xc7)) * (glow * AMBIENT_PER_UNIT),
+        emissive_exposure_weight: 1.0,
+        perceptual_roughness: 0.15,
+        metallic,
+        ..default()
+    }
+}
+
 fn octahedron(radius: f32) -> Mesh {
     let top = Vec3::Y * radius;
     let bottom = -top;
@@ -310,7 +326,11 @@ fn spawn_crystal(
     commands.spawn((
         CrystalId(id),
         Mesh3d(assets.crystal.clone()),
-        MeshMaterial3d(assets.crystal_glow.clone()),
+        MeshMaterial3d(if crystal.planted {
+            assets.planted_crystal_glow.clone()
+        } else {
+            assets.crystal_glow.clone()
+        }),
         Transform::from_translation(crystal.position).with_scale(crystal.scale),
         NotShadowCaster,
         ChildOf(parent),

@@ -61,6 +61,9 @@ pub struct Crystal {
     pub rotation: Vec3,
     /// Offsets the bobbing so crystals don't move in unison.
     pub phase: f32,
+    /// `true` for crystals added later with "+ Crystal". The original gave those a
+    /// different material from the ones scattered at startup.
+    pub planted: bool,
 }
 
 impl Crystal {
@@ -149,6 +152,7 @@ impl Scenery {
             scale: Vec3::splat(1.1 / 0.9),
             rotation: Vec3::ZERO,
             phase: self.rng.range(0.0..6.0),
+            planted: true,
         };
         self.crystals.push(crystal);
         crystal
@@ -286,6 +290,7 @@ fn place_crystals(terrain: &Terrain, rng: &mut Rng) -> Vec<Crystal> {
                 scale: Vec3::new(s, s * 1.8, s),
                 rotation: random_lean(rng),
                 phase: rng.angle(),
+                planted: false,
             });
         }
     }
