@@ -1,7 +1,9 @@
 // The fragment shader for `IslandMaterial` (see color.rs): Bevy's standard PBR
-// shader, except for the last step. Bevy mixes in fog and then tonemaps; Three.js
-// r128, like the original, tonemaps and then mixes in fog. Doing it in r128's order
-// lets the fog use the original's colours as they are.
+// shader, with two r128 steps of its own:
+// - the fill light (ambient + hemisphere) is added here with r128's formula;
+// - Bevy mixes in fog and then tonemaps; Three.js r128, like the original,
+//   tonemaps and then mixes in fog. Doing it in r128's order lets the fog use the
+//   original's colours as they are.
 //
 // This is WESL, a superset of WGSL that adds `import` (and `@if` for features that
 // may be switched off). The imports reuse Bevy's own shader functions.
@@ -18,9 +20,30 @@ import bevy_core_pipeline::tonemapping::tone_mapping;
 @if(PREMULTIPLY_ALPHA)
 import bevy_pbr::render::pbr_functions::premultiply_alpha;
 
+// `R128Shading::fill_light` (binding 100): ambient, sky and ground colours in
+// pixels 0, 1 and 2. `constants::MATERIAL_BIND_GROUP` is the material's bind
+// group number, which Bevy fills in (Bevy's own shaders use it the same way).
+@group(constants::MATERIAL_BIND_GROUP) @binding(100) var fill_light: texture_2d<f32>;
+
+// r128's fill light on a surface: `AmbientLight` plus `HemisphereLight`, which
+// blends from the ground colour (facing down) to the sky colour (facing up). Both
+// light only the matte ("diffuse") part of the surface, and fully. Bevy's own
+// ambient light takes away whatever a surface reflects as specular first, which
+// made smooth, metallic surfaces seen edge-on (the far sea) up to 30% darker.
+fn r128_fill_light(normal: vec3<f32>, base_color: vec3<f32>, metallic: f32) -> vec3<f32> {
+    let ambient = textureLoad(fill_light, vec2(0, 0), 0).rgb;
+    let sky = textureLoad(fill_light, vec2(1, 0), 0).rgb;
+    let ground = textureLoad(fill_light, vec2(2, 0), 0).rgb;
+    let irradiance = ambient + mix(ground, sky, 0.5 * normal.y + 0.5);
+    // Metals have no matte part; r128 and Bevy both scale it by (1 − metallic).
+    let diffuse_color = base_color * (1.0 - metallic);
+    // Bevy multiplies all light by the camera's exposure; do the same here.
+    return diffuse_color * irradiance * view.exposure;
+}
+
 @fragment
 fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> FragmentOutput {
-    // Everything up to here is exactly what Bevy's standard material does.
+    // From here to the lighting, this is exactly what Bevy's standard material does.
     var pbr_input = pbr_input_from_standard_material(in, is_front);
     pbr_input.material.base_color = alpha_discard(
         pbr_input.material.flags,
@@ -32,6 +55,11 @@ fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> Fragment
     var color: vec4<f32>;
     if (flags & STANDARD_MATERIAL_FLAGS_UNLIT_BIT) == 0u {
         color = apply_pbr_lighting(pbr_input);
+        color = vec4(color.rgb + r128_fill_light(
+            pbr_input.N,
+            pbr_input.material.base_color.rgb,
+            pbr_input.material.metallic,
+        ), color.a);
     } else {
         color = pbr_input.material.base_color;
     }

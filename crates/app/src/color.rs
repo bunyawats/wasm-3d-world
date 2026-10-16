@@ -15,9 +15,10 @@
 //! 1. gives Bevy raw colours: [`rgb`] and [`hex`] treat the bytes as linear values;
 //! 2. sets the camera's exposure so the brightness going into tonemapping equals
 //!    r128's (`renderer.toneMappingExposure = 1.05`, which r128 divides by 0.6);
-//! 3. shades every mesh with [`IslandMaterial`], Bevy's standard material with the
-//!    last step swapped for r128's: tonemap *first*, then mix in the fog (Bevy
-//!    does it the other way round), using r128's `FogExp2` formula;
+//! 3. shades every mesh with [`IslandMaterial`], Bevy's standard material with
+//!    r128's fill light (ambient + hemisphere, see [`FILL_LIGHT`]) and r128's
+//!    last step: tonemap *first*, then mix in the fog (Bevy does it the other
+//!    way round), using r128's `FogExp2` formula;
 //! 4. adds a full-screen pass that undoes Bevy's final sRGB encoding, so the
 //!    screen shows the tonemapped numbers as they are, like r128 did.
 //!
@@ -25,7 +26,7 @@
 //! steps the result matches.
 
 use bevy::{
-    asset::embedded_asset,
+    asset::{embedded_asset, uuid_handle},
     camera::Exposure,
     core_pipeline::{
         Core3dSystems,
@@ -80,6 +81,19 @@ pub const fn hex(rgb_hex: u32) -> Color {
     rgb((rgb_hex >> 16) as u8, (rgb_hex >> 8) as u8, rgb_hex as u8)
 }
 
+/// The original's ambient and hemisphere light, as a 3×1 image every
+/// [`IslandMaterial`] reads: pixel 0 is the ambient colour, 1 the hemisphere's
+/// sky colour and 2 its ground colour, already in Bevy's light units.
+/// `environment.rs` creates it and repaints it as the day goes by.
+///
+/// Why an image? All materials need the same few numbers, which change with the
+/// time of day. A material can point at an image, and repainting that one image
+/// updates every material at once.
+///
+/// A `const` handle is a fixed ID (a UUID) rather than one handed out by
+/// `Assets::add`, so `R128Shading::default()` can name the image before it exists.
+pub const FILL_LIGHT: Handle<Image> = uuid_handle!("6c1b7a3e-58f2-4d0a-9e57-2f4b8c9d1a10");
+
 /// Every mesh's material: Bevy's `StandardMaterial`, shaded the r128 way.
 ///
 /// `ExtendedMaterial` wraps a base material and adds an *extension* that can
@@ -94,10 +108,27 @@ pub fn material(base: StandardMaterial) -> IslandMaterial {
     }
 }
 
-/// The extension half of [`IslandMaterial`]. It has no settings of its own; it
-/// only swaps in `r128_shading.wesl` as the fragment shader.
-#[derive(Asset, AsBindGroup, Reflect, Debug, Clone, Default)]
-pub struct R128Shading {}
+/// The extension half of [`IslandMaterial`]: swaps in `r128_shading.wesl` as the
+/// fragment shader and hands it the [`FILL_LIGHT`] image.
+///
+/// `#[texture(100)]` makes the image a shader binding; extensions number theirs
+/// from 100 so they don't clash with the `StandardMaterial`'s. `filterable =
+/// false` because the shader reads exact pixels (`textureLoad`), and WebGL2
+/// can't filter 32-bit float images anyway.
+#[derive(Asset, AsBindGroup, Reflect, Debug, Clone)]
+pub struct R128Shading {
+    #[texture(100, filterable = false)]
+    fill_light: Handle<Image>,
+}
+
+// Written by hand instead of `#[derive(Default)]`, which would give an empty handle.
+impl Default for R128Shading {
+    fn default() -> Self {
+        Self {
+            fill_light: FILL_LIGHT,
+        }
+    }
+}
 
 impl MaterialExtension for R128Shading {
     fn fragment_shader() -> ShaderRef {
