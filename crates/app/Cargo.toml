@@ -37,6 +37,10 @@ features = [
     "bevy_pbr",
     "bevy_anti_alias",
     "bevy_post_process",
+    # Not listed: "tonemapping_luts". The TonyMcMapface, AgX and BlenderFilmic
+    # tonemappers read lookup-table images from it, but camera.rs picks
+    # `Tonemapping::AcesFitted`, which is pure maths in the shader, so the tables
+    # (and the ktx2/zstd decoders they need) would be dead weight.
     # Clicking on creatures.
     "bevy_picking",
     "mesh_picking",
