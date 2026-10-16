@@ -111,12 +111,14 @@ struct OrbitCamera {
     goal: Orbit,
 }
 
-fn spawn_camera(mut commands: Commands, island: Res<IslandTerrain>) {
-    // Same starting eye as the original, (55, 32, 70). The original looked at
-    // (0, 4, 0), but the meadow there is about 7 m high, which put the orbit
-    // centre inside the hill. Aim just above the ground instead.
-    let target = Vec3::new(0.0, island.0.height(0.0, 0.0) + TARGET_HEIGHT, 0.0);
-    let orbit = Orbit::looking_from(Vec3::new(55.0, 32.0, 70.0), target);
+fn spawn_camera(mut commands: Commands) {
+    // The original's starting view: the eye at (55, 32, 70), looking at (0, 4, 0).
+    // The meadow there is about 7 m high, so that point is inside the hill, but
+    // it sets the view's tilt: aiming at the ground instead tips the camera up
+    // and drops the horizon down the screen. The first pan lifts the orbit
+    // centre out of the hill (see `orbit_input`), and `GROUND_CLEARANCE`
+    // keeps the camera itself above ground.
+    let orbit = Orbit::looking_from(Vec3::new(55.0, 32.0, 70.0), Vec3::new(0.0, 4.0, 0.0));
 
     commands.spawn((
         Name::new("Camera"),
