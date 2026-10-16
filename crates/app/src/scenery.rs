@@ -66,10 +66,10 @@ struct SceneryAssets {
     blade: Handle<Mesh>,
     crystal: Handle<Mesh>,
 
-    bark: Handle<IslandMaterial>,
-    /// Pine tiers alternate between two shades of green.
-    pine_needles: [Handle<IslandMaterial>; 2],
-    oak_leaves: Handle<IslandMaterial>,
+    /// Trees scattered at startup and trees added with "+ Tree" are coloured
+    /// differently, like crystals.
+    trees: TreeMaterials,
+    planted_trees: TreeMaterials,
     stone: Handle<IslandMaterial>,
     grass: Handle<IslandMaterial>,
     /// Crystals scattered at startup are metallic; ones added with "+ Crystal" aren't.
@@ -92,12 +92,24 @@ impl SceneryAssets {
                 ..default()
             }))
         };
-        let bark = matte([0x4a, 0x35, 0x25], 0.92);
-        let pine_needles = [
-            matte([0x1e, 0x4d, 0x2b], 0.82),
-            matte([0x26, 0x5c, 0x34], 0.82),
-        ];
-        let oak_leaves = matte([0x3b, 0x6e, 0x38], 0.8);
+        // The original's materials from `populateFloraAndRocks()`...
+        let trees = TreeMaterials {
+            bark: matte([0x4a, 0x35, 0x25], 0.92),
+            pine_needles: [
+                matte([0x1e, 0x4d, 0x2b], 0.82),
+                matte([0x26, 0x5c, 0x34], 0.82),
+            ],
+            oak_leaves: matte([0x3b, 0x6e, 0x38], 0.8),
+        };
+        // ...and from `spawnObject('tree')`: one brighter green for every leafy
+        // part. `Handle::clone` copies the handle, not the material, so all three
+        // share one material.
+        let leaves = matte([0x15, 0x80, 0x3d], 0.8);
+        let planted_trees = TreeMaterials {
+            bark: matte([0x4a, 0x35, 0x25], 0.9),
+            pine_needles: [leaves.clone(), leaves.clone()],
+            oak_leaves: leaves,
+        };
         let stone = matte([0x64, 0x74, 0x8b], 0.88);
         let grass = matte([0x4d, 0x8c, 0x45], 0.8);
 
@@ -123,9 +135,8 @@ impl SceneryAssets {
                 .resolution(4),
             ),
             crystal: meshes.add(octahedron(0.9)),
-            bark,
-            pine_needles,
-            oak_leaves,
+            trees,
+            planted_trees,
             stone,
             grass,
             // The original's two crystal materials, from `populateFloraAndRocks()`
@@ -140,6 +151,14 @@ impl SceneryAssets {
             })),
         }
     }
+}
+
+/// The materials for one look of tree.
+struct TreeMaterials {
+    bark: Handle<IslandMaterial>,
+    /// Pine tiers alternate between two shades of green.
+    pine_needles: [Handle<IslandMaterial>; 2],
+    oak_leaves: Handle<IslandMaterial>,
 }
 
 /// A low-poly sphere (an icosphere subdivided once), optionally flat-shaded so
@@ -390,14 +409,19 @@ fn spawn_tree(commands: &mut Commands, assets: &SceneryAssets, parent: Entity, t
         commands,
         pickable: false,
     };
-    rig.part(root, &assets.trunk, &assets.bark, at(0.0, 1.3, 0.0));
+    let materials = if tree.planted {
+        &assets.planted_trees
+    } else {
+        &assets.trees
+    };
+    rig.part(root, &assets.trunk, &materials.bark, at(0.0, 1.3, 0.0));
 
     match tree.kind {
         TreeKind::Pine => {
             // `zip` pairs each tier's numbers with its mesh; `enumerate` adds the
             // index, used to alternate the two needle colours.
             for (i, ((_, _, y), mesh)) in PINE_TIERS.iter().zip(&assets.pine_tiers).enumerate() {
-                rig.part(root, mesh, &assets.pine_needles[i % 2], at(0.0, *y, 0.0));
+                rig.part(root, mesh, &materials.pine_needles[i % 2], at(0.0, *y, 0.0));
             }
         }
         TreeKind::Oak => {
@@ -405,7 +429,7 @@ fn spawn_tree(commands: &mut Commands, assets: &SceneryAssets, parent: Entity, t
                 rig.part(
                     root,
                     &assets.ball,
-                    &assets.oak_leaves,
+                    &materials.oak_leaves,
                     at(x, y, z).with_scale(Vec3::splat(radius)),
                 );
             }

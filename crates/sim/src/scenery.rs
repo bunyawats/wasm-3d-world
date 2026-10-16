@@ -27,6 +27,9 @@ pub struct Tree {
     pub scale: f32,
     /// Rotation about the vertical axis, so trees don't all look identical.
     pub yaw: f32,
+    /// `true` for trees added later with "+ Tree". Like planted crystals, the
+    /// original gave those different (brighter green) materials.
+    pub planted: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -137,6 +140,7 @@ impl Scenery {
             position: Vec3::new(spot.x, ground, spot.y),
             scale: 1.0,
             yaw: self.rng.angle(),
+            planted: true,
         };
         self.trees.push(tree);
         tree // `Tree` is `Copy`, so returning it after pushing a copy is fine.
@@ -228,6 +232,7 @@ fn place_trees(terrain: &Terrain, count: usize, rng: &mut Rng) -> Vec<Tree> {
                 position: Vec3::new(spot.x, y - 0.1, spot.y),
                 scale: rng.range(0.75..1.4),
                 yaw: rng.angle(),
+                planted: false,
             });
         }
     }
@@ -392,8 +397,13 @@ mod tests {
     fn planted_trees_become_obstacles() {
         let (terrain, mut scenery) = scenery();
         let before = scenery.obstacles().len();
-        scenery.plant_tree(&terrain);
+        let tree = scenery.plant_tree(&terrain);
         assert_eq!(scenery.obstacles().len(), before + 1);
+        // Planted trees get their own colours; the startup forest doesn't.
+        assert!(tree.planted);
+        let (new, startup) = scenery.trees.split_last().expect("just planted one");
+        assert_eq!(*new, tree);
+        assert!(startup.iter().all(|t| !t.planted));
     }
 
     #[test]
